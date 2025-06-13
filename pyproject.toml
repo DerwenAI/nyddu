@@ -1,0 +1,26 @@
+[project]
+
+name = "nyddu"
+version = "0.1.0"
+description = "spider-ish"
+
+authors = [
+    { name = "Paco Nathan", email = "paco@derwen.ai" }
+]
+
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "tqdm (>=4.67.1,<5.0.0)",
+    "icecream (>=2.1.4,<3.0.0)"
+]
+
+
+[build-system]
+
+requires = [
+    "poetry-core>=2.0.0,<3.0.0",
+]
+
+build-backend = "poetry.core.masonry.api"
