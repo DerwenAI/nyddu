@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Class definitions for Nyddu.
+Page representation for Nyddu.
 see copyright/license https://github.com/DerwenAI/nyddu/README.md
 """
 
@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 import typing
 import uuid
 
-from icecream import ic
 from defusedxml import ElementTree 
 from pydantic import BaseModel
 import requests
@@ -122,4 +121,4 @@ Iterate through the links in a given `sitemap.xml` page.
             for node in tree:
                 yield node[0].text
         except Exception as ex:
-            ic(ex, uri)
+            print(ex, uri)
