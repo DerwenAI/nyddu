@@ -12,7 +12,7 @@ import typing
 import warnings
 
 from bs4 import BeautifulSoup
-from icecream import ic
+from icecream import ic  # type: ignore
 import requests
 import w3lib.url
 
@@ -23,7 +23,7 @@ class Crawler:
     """
 A spider-ish crawler.
     """
-    def __init__ (
+    def __init__ (  # pylint: disable=W0102
         self,
         *,
         site_base: str = "https://example.com",
@@ -70,28 +70,28 @@ Extract all the links from an HTML document.
         soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
 
         for tag in soup.find_all("a"):
-            if "href" in tag.attrs:
-                uri: typing.Optional[ str ] = cls.validate_link(tag.attrs["href"], path)
+            if "href" in tag.attrs:  # type: ignore
+                uri: typing.Optional[ str ] = cls.validate_link(tag.attrs["href"], path)  # type: ignore  # pylint: disable=C0301
 
                 if uri is not None:
                     yield uri
 
         for tag in soup.find_all("img"):
-            if "src" in tag.attrs:
-                uri: typing.Optional[ str ] = cls.validate_link(tag.attrs["src"], path)
+            if "src" in tag.attrs:  # type: ignore
+                uri = cls.validate_link(tag.attrs["src"], path)  # type: ignore
 
                 if uri is not None:
                     yield uri
 
         for tag in soup.find_all("iframe"):
-            if "src" in tag.attrs:
-                uri: typing.Optional[ str ] = cls.validate_link(tag.attrs["src"], path)
+            if "src" in tag.attrs:  # type: ignore
+                uri = cls.validate_link(tag.attrs["src"], path)  # type: ignore
 
                 if uri is not None:
                     yield uri
 
 
-    async def load_queue (
+    async def load_queue (  # pylint: disable=R0912
         self,
         uri: str,
         ref: typing.Optional[ InternalPage ],
@@ -123,7 +123,7 @@ Coroutine to load URIs into the queue.
 
             elif path in self.known_pages:
                 # add a back-reference
-                int_page: InternalPage = self.known_pages[path]
+                int_page: InternalPage = self.known_pages[path]  # type: ignore
 
                 if ref is not None:
                     int_page.add_ref(ref.path)
@@ -167,7 +167,7 @@ Coroutine to load URIs into the queue.
                 self.known_pages[uri] = ext_page
 
             else:
-                ext_page = self.known_pages[uri]
+                ext_page = self.known_pages[uri]  # type: ignore
 
             if ref is not None:
                 ext_page.add_ref(ref.path)
@@ -192,10 +192,10 @@ Coroutine to consume URLs from the queue.
 
             # crawl!
             print(f">got {task}")
-            uri, int_page, ref = task
+            uri, int_page, ref = task  # pylint: disable=W0612
 
             try:
-                response: request.Response = requests.get(
+                response: requests.Response = requests.get(
                     uri,
                     timeout = 10,
                     headers = {
@@ -204,8 +204,8 @@ Coroutine to consume URLs from the queue.
                 )
 
                 html: str = response.text
-                headers: typing.Dict[ str, str ] = response.headers
-                content_type: str = headers.get("content-type").split(";")[0]
+                headers: typing.Dict[ str, str ] = response.headers  # type: ignore
+                content_type: str = headers.get("content-type").split(";")[0]  # type: ignore
 
                 if debug:
                     ic(uri, response.status_code, headers, content_type)
@@ -221,7 +221,7 @@ Coroutine to consume URLs from the queue.
 
         print("consumer: all done")
 
- 
+
     async def crawl (
         self,
         site_map: str = "https://example.com",
@@ -235,7 +235,7 @@ Crawler entry point coroutine.
         # send an "all done" signal
         await self.queue.put(None)
         await asyncio.gather(self.consumer())
- 
+
 
     def report (
         self,

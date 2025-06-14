@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 import typing
 import uuid
 
-from defusedxml import ElementTree 
+from defusedxml import ElementTree
 from pydantic import BaseModel
 import requests
 
@@ -115,10 +115,10 @@ Extract the path for an internal URL.
 Iterate through the links in a given `sitemap.xml` page.
         """
         try:
-            xml = requests.get(uri).text
+            xml = requests.get(uri, timeout = 10).text
             tree = ElementTree.XML(xml)
 
             for node in tree:
-                yield node[0].text
-        except Exception as ex:
+                yield node[0].text  # type: ignore
+        except Exception as ex:  # pylint: disable=W0718
             print(ex, uri)
