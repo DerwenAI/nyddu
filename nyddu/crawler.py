@@ -8,6 +8,7 @@ see copyright/license https://github.com/DerwenAI/nyddu/README.md
 
 from collections.abc import Iterator
 import asyncio
+import enum
 import typing
 import warnings
 
@@ -17,6 +18,42 @@ import requests
 import w3lib.url
 
 from .page import InternalPage, ExternalPage, Page
+
+
+class URLKind (enum.StrEnum):
+    """
+An enumeration class representing URL kinds.
+    """
+    INTERNAL = enum.auto()
+    EXTERNAL = enum.auto()
+    URN = enum.auto()
+
+
+class ShortenedURL:  # pylint: disable=R0903
+    """
+Represents a shortened URL.
+    """
+    def __init__ (
+        self,
+        uri: str,
+        expanded_uri: str,
+        kind: URLKind,
+        ) -> None:
+        """
+Constructor.
+        """
+        self.uri: str = uri
+        self.expanded_uri: str = expanded_uri
+        self.kind: URLKind = kind
+
+
+    def __repr__ (
+        self,
+        ) -> str:
+        """
+Represent object as a string.
+        """
+        return f"{self.kind}  {self.uri} : {self.expanded_uri}"
 
 
 class Crawler:
@@ -29,6 +66,7 @@ A spider-ish crawler.
         site_base: str = "https://example.com",
         path_rewrites: typing.Dict[ str, str ] = {},
         ignored_paths: typing.Set[ str ] = set([]),
+        shorty: typing.Dict[ str, ShortenedURL ] = {},
         ) -> None:
         """
 Constructor.
@@ -36,6 +74,8 @@ Constructor.
         self.site_base: str = site_base
         self.path_rewrites: typing.Dict[ str, str ] = path_rewrites
         self.ignored_paths: typing.Set[ str ] = ignored_paths
+        self.shorty: typing.Dict[ str, ShortenedURL ] = shorty
+
         self.known_pages: typing.Dict[ str, Page ] = {}
         self.queue: asyncio.Queue = asyncio.Queue(maxsize = 0)
 
@@ -50,10 +90,10 @@ Constructor.
 Filter valid links.
         """
         if not (uri.startswith("#") or uri in [ "." ]):
-            if not (uri.startswith("http") or uri.startswith("/")):
-                return f"{path}{uri}"
+            if uri.startswith("http") or uri.startswith("data:") or uri.startswith("/"):
+                return uri
 
-            return uri
+            return f"{path}{uri}"
 
         return None
 
@@ -101,6 +141,14 @@ Extract all the links from an HTML document.
         """
 Coroutine to load URIs into the queue.
         """
+        slug: typing.Optional[ str ] = None
+
+        if uri in self.shorty:
+            if self.shorty[uri].kind in [ URLKind.INTERNAL, URLKind.EXTERNAL ]:
+                ## fuck: handle shows
+                slug = uri
+                uri = self.shorty[uri].expanded_uri
+
         if uri.startswith("#"):
             # ignore internal anchors (for now)
             pass
@@ -116,8 +164,7 @@ Coroutine to load URIs into the queue.
                 path = self.path_rewrites[path]
 
             if path in self.ignored_paths:
-                # is this really one of ours?
-                # fuck
+                # fuck: is this really one of ours?
                 #self.outbound[u] = "?"
                 pass
 
@@ -161,7 +208,7 @@ Coroutine to load URIs into the queue.
             if uri not in self.known_pages:
                 ext_page: ExternalPage = ExternalPage(
                     uri = uri,
-                    slug = None,
+                    slug = slug,
                 )
 
                 self.known_pages[uri] = ext_page

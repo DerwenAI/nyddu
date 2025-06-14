@@ -6,11 +6,36 @@ Demo script.
 """
 
 import asyncio
+import json
+import pathlib
+import sys
+import typing
 
-from nyddu import Crawler
+from icecream import ic
+from nyddu import Crawler, ShortenedURL, URLKind
+import w3lib.url
 
 
 if __name__ == "__main__":
+    # load the shortened URLs
+    shorty: typing.Dict[ str, ShortenedURL ] = {}
+
+    with open(pathlib.Path("shorty.json"), encoding = "utf-8") as fp:
+        for key, val in json.load(fp).items():
+            if not (key.startswith("http://") or key.startswith("https://")):
+                uri: str = f"/s/{key}"
+
+                if val.startswith("urn:"):
+                    shorty[uri] = ShortenedURL(uri, val, URLKind.URN)
+
+                elif val.startswith("https://derwen.ai"):
+                    shorty[uri] = ShortenedURL(uri, val, URLKind.INTERNAL)
+
+                else:
+                    val = w3lib.url.canonicalize_url(val)
+                    shorty[uri] = ShortenedURL(uri, val, URLKind.EXTERNAL)
+
+    # run the crawler
     crawler: Crawler = Crawler(
         site_base = "https://derwen.ai",
         path_rewrites = {
@@ -25,6 +50,7 @@ if __name__ == "__main__":
             "/robots.txt",
             "/sitemap.xml",
         ]),
+        shorty = shorty,
     )
 
     asyncio.run(
