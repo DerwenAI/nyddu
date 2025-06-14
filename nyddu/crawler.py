@@ -6,54 +6,15 @@ Crawler class for Nyddu.
 see copyright/license https://github.com/DerwenAI/nyddu/README.md
 """
 
-from collections.abc import Iterator
 import asyncio
-import enum
 import typing
 import warnings
 
-from bs4 import BeautifulSoup
 from icecream import ic  # type: ignore
-import requests
+import requests_cache
 import w3lib.url
 
-from .page import InternalPage, ExternalPage, Page
-
-
-class URLKind (enum.StrEnum):
-    """
-An enumeration class representing URL kinds.
-    """
-    INTERNAL = enum.auto()
-    EXTERNAL = enum.auto()
-    URN = enum.auto()
-
-
-class ShortenedURL:  # pylint: disable=R0903
-    """
-Represents a shortened URL.
-    """
-    def __init__ (
-        self,
-        uri: str,
-        expanded_uri: str,
-        kind: URLKind,
-        ) -> None:
-        """
-Constructor.
-        """
-        self.uri: str = uri
-        self.expanded_uri: str = expanded_uri
-        self.kind: URLKind = kind
-
-
-    def __repr__ (
-        self,
-        ) -> str:
-        """
-Represent object as a string.
-        """
-        return f"{self.kind}  {self.uri} : {self.expanded_uri}"
+from .page import Page, ShortenedURL, URLKind
 
 
 class Crawler:
@@ -71,91 +32,66 @@ A spider-ish crawler.
         """
 Constructor.
         """
+        # configuration
         self.site_base: str = site_base
         self.path_rewrites: typing.Dict[ str, str ] = path_rewrites
         self.ignored_paths: typing.Set[ str ] = ignored_paths
         self.shorty: typing.Dict[ str, ShortenedURL ] = shorty
 
+        # runtime data structures
         self.known_pages: typing.Dict[ str, Page ] = {}
         self.queue: asyncio.Queue = asyncio.Queue(maxsize = 0)
+        self.session: requests_cache.CachedSession = self.get_cache()
 
 
-    @classmethod
-    def validate_link (
-        cls,
-        uri: str,
-        path: str,
-        ) -> typing.Optional[ str ]:
+    def get_cache (
+        self,
+        ) -> requests_cache.CachedSession:
         """
-Filter valid links.
+Build a URL request cache session, optionally loading any
+previous serialized cache from disk.
         """
-        if not (uri.startswith("#") or uri in [ "." ]):
-            if uri.startswith("http") or uri.startswith("data:") or uri.startswith("/"):
-                return uri
+        # NB: these parameters should move into config
 
-            return f"{path}{uri}"
+        session: requests_cache.CachedSession = requests_cache.CachedSession(
+            backend = requests_cache.SQLiteCache("nyddu.cache"),
+        )
 
-        return None
+        session.settings.expire_after = 360
 
-
-    @classmethod
-    def extract_links (
-        cls,
-        html: str,
-        path: str,
-        ) -> Iterator[ str ]:
-        """
-Extract all the links from an HTML document.
-        """
-        soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
-
-        for tag in soup.find_all("a"):
-            if "href" in tag.attrs:  # type: ignore
-                uri: typing.Optional[ str ] = cls.validate_link(tag.attrs["href"], path)  # type: ignore  # pylint: disable=C0301
-
-                if uri is not None:
-                    yield uri
-
-        for tag in soup.find_all("img"):
-            if "src" in tag.attrs:  # type: ignore
-                uri = cls.validate_link(tag.attrs["src"], path)  # type: ignore
-
-                if uri is not None:
-                    yield uri
-
-        for tag in soup.find_all("iframe"):
-            if "src" in tag.attrs:  # type: ignore
-                uri = cls.validate_link(tag.attrs["src"], path)  # type: ignore
-
-                if uri is not None:
-                    yield uri
+        return session
 
 
     async def load_queue (  # pylint: disable=R0912
         self,
         uri: str,
-        ref: typing.Optional[ InternalPage ],
+        ref: typing.Optional[ Page ],
         *,
         debug: bool = False,
         ) -> None:
         """
 Coroutine to load URIs into the queue.
         """
+        kind: URLKind = URLKind.INTERNAL
         slug: typing.Optional[ str ] = None
 
         if uri in self.shorty:
-            if self.shorty[uri].kind in [ URLKind.INTERNAL, URLKind.EXTERNAL ]:
-                ## fuck: handle shows
+            kind = self.shorty[uri].kind
+
+            if kind in [ URLKind.INTERNAL, URLKind.EXTERNAL ]:
                 slug = uri
                 uri = self.shorty[uri].expanded_uri
+            else:
+                ## fuck: handle shows
+                pass
 
-        if uri.startswith("#"):
-            # ignore internal anchors (for now)
+        if uri.startswith("#") or uri.startswith("data:"):
+            # ignore internal anchors and data URLs (for now)
             pass
 
         elif uri.startswith("/") or uri.startswith(self.site_base):
             # normalize internal links to just their path
-            path: str = InternalPage.get_path(
+            path: str = Page.get_path(
                 uri,
                 base = self.site_base,
             )
@@ -170,33 +106,34 @@ Coroutine to load URIs into the queue.
 
             elif path in self.known_pages:
                 # add a back-reference
-                int_page: InternalPage = self.known_pages[path]  # type: ignore
+                page: Page = self.known_pages[path]
 
                 if ref is not None:
-                    int_page.add_ref(ref.path)
+                    page.add_ref(ref.path, slug)
                     ref.outbound.add(path)
 
             else:
-                int_page = InternalPage(
+                page = Page(
                     uri = uri,
+                    kind = kind,
                     path = path,
+                    slug = slug,
                 )
 
-                int_page.normalize(
+                page.normalize(
                     base = self.site_base,
                 )
 
-                self.known_pages[path] = int_page
+                self.known_pages[path] = page
 
                 if ref is not None:
-                    int_page.add_ref(ref.path)
+                    page.add_ref(ref.path, slug)
                     ref.outbound.add(path)
 
-                if debug:
-                    ic("LOAD", uri, int_page, ref)
+                if debug or True:  # pylint: disable=R1727
+                    ic("LOAD", page)
 
-                task: tuple = ( uri, int_page, ref, )
-                await self.queue.put(task)
+                await self.queue.put(page)
 
         else:
             # a bona fide external link
@@ -206,67 +143,52 @@ Coroutine to load URIs into the queue.
                 ic("WTF!!!", uri, ref)
 
             if uri not in self.known_pages:
-                ext_page: ExternalPage = ExternalPage(
+                page = Page(
                     uri = uri,
+                    kind = URLKind.EXTERNAL,
                     slug = slug,
                 )
 
-                self.known_pages[uri] = ext_page
+                self.known_pages[uri] = page
 
             else:
-                ext_page = self.known_pages[uri]  # type: ignore
+                page = self.known_pages[uri]
 
             if ref is not None:
-                ext_page.add_ref(ref.path)
+                page.add_ref(ref.path, slug)
                 ref.outbound.add(uri)
 
 
-    async def consumer (
+    async def consume_tasks (
         self,
         *,
-        debug: bool = False,
+        debug: bool = True,
         ) -> None:
         """
 Coroutine to consume URLs from the queue.
         """
-        print("consumer: start")
+        if debug:
+            print("QUEUE status: start")
 
         while True:
-            task = await self.queue.get()
+            page: typing.Optional[ Page ] = await self.queue.get()
 
-            if task is None:
+            if page is None:
+                print("QUEUE size at end:", self.queue.qsize())
                 break
 
             # crawl!
-            print(f">got {task}")
-            uri, int_page, ref = task  # pylint: disable=W0612
+            if debug:
+                print(f">got {page}")
 
-            try:
-                response: requests.Response = requests.get(
-                    uri,
-                    timeout = 10,
-                    headers = {
-                        "User-Agent": "Custom",
-                    },
-                )
+            html: typing.Optional[ str ] = await page.request_content(self.session)
 
-                html: str = response.text
-                headers: typing.Dict[ str, str ] = response.headers  # type: ignore
-                content_type: str = headers.get("content-type").split(";")[0]  # type: ignore
+            if html is not None and page.content_type in [ "text/html" ]:
+                for emb_uri in page.extract_links(html):
+                    await self.load_queue(emb_uri, page)
 
-                if debug:
-                    ic(uri, response.status_code, headers, content_type)
-
-                int_page.content_type = content_type
-
-                if content_type in [ "text/html" ]:
-                    for emb_uri in self.extract_links(html, int_page.path):
-                        await self.load_queue(emb_uri, int_page)
-
-            except requests.exceptions.Timeout:
-                print("timed out", uri)
-
-        print("consumer: all done")
+        if debug:
+            print("QUEUE status: all done")
 
 
     async def crawl (
@@ -276,12 +198,12 @@ Coroutine to consume URLs from the queue.
         """
 Crawler entry point coroutine.
         """
-        for uri in InternalPage.get_site_links(site_map):
+        for uri in Page.get_site_links(site_map, self.session):
             await self.load_queue(uri, None)
 
         # send an "all done" signal
         await self.queue.put(None)
-        await asyncio.gather(self.consumer())
+        await asyncio.gather(self.consume_tasks())
 
 
     def report (

@@ -12,8 +12,10 @@ import sys
 import typing
 
 from icecream import ic
-from nyddu import Crawler, ShortenedURL, URLKind
+from pyinstrument import Profiler
 import w3lib.url
+
+from nyddu import Crawler, ShortenedURL, URLKind
 
 
 if __name__ == "__main__":
@@ -27,6 +29,7 @@ if __name__ == "__main__":
 
                 if val.startswith("urn:"):
                     shorty[uri] = ShortenedURL(uri, val, URLKind.URN)
+                    ic(shorty[uri])
 
                 elif val.startswith("https://derwen.ai"):
                     shorty[uri] = ShortenedURL(uri, val, URLKind.INTERNAL)
@@ -34,6 +37,10 @@ if __name__ == "__main__":
                 else:
                     val = w3lib.url.canonicalize_url(val)
                     shorty[uri] = ShortenedURL(uri, val, URLKind.EXTERNAL)
+
+    ## start code profiling
+    profiler: Profiler = Profiler()
+    profiler.start()
 
     # run the crawler
     crawler: Crawler = Crawler(
@@ -59,4 +66,9 @@ if __name__ == "__main__":
         )
     )
 
+    ## end code profiling
+    profiler.stop()
+
+    #sys.exit(0)
     crawler.report()
+    profiler.print()

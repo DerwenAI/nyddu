@@ -8,22 +8,43 @@ see copyright/license https://github.com/DerwenAI/nyddu/README.md
 
 from collections.abc import Iterator
 from urllib.parse import urlparse
+import enum
 import typing
 import uuid
 
+from bs4 import BeautifulSoup
 from defusedxml import ElementTree
+from icecream import ic  # type: ignore
 from pydantic import BaseModel
 import requests
+import requests_cache
 
 
-class Page (BaseModel):
+class URLKind (enum.StrEnum):
     """
-A data class representing one HTML page.
+An enumeration class representing URL kinds.
     """
-    uri: str
-    uid: str = str(uuid.uuid4())
-    content_type: typing.Optional[ str ] = None
-    refs: typing.Set[ str ] = set([])
+    EXTERNAL = enum.auto()
+    INTERNAL = enum.auto()
+    URN = enum.auto()
+
+
+class ShortenedURL:  # pylint: disable=R0903
+    """
+Represents a shortened URL.
+    """
+    def __init__ (
+        self,
+        uri: str,
+        expanded_uri: str,
+        kind: URLKind,
+        ) -> None:
+        """
+Constructor.
+        """
+        self.uri: str = uri
+        self.expanded_uri: str = expanded_uri
+        self.kind: URLKind = kind
 
 
     def __repr__ (
@@ -32,7 +53,55 @@ A data class representing one HTML page.
         """
 Represent object as a string.
         """
-        return self.uri
+        return f"{self.kind}  {self.uri} : {self.expanded_uri}"
+
+
+class Page (BaseModel):
+    """
+A data class representing one HTML page.
+    """
+    uri: str
+    kind: URLKind
+    uid: str = str(uuid.uuid4())
+    path: typing.Optional[ str ] = None
+    slug: typing.Optional[ str ] = None
+    content_type: typing.Optional[ str ] = None
+    status_code: typing.Optional[ int ] = None
+    outbound: typing.Set[ str ] = set([])
+    refs: typing.Set[ str ] = set([])
+    raw_refs: typing.Set[ str ] = set([])
+
+
+    def __repr__ (
+        self,
+        ) -> str:
+        """
+Represent object as a string.
+        """
+        match self.kind:
+            case URLKind.INTERNAL:
+                return self.path  # type: ignore
+            case _:
+                return self.uri
+
+
+    @classmethod
+    def get_site_links (
+        cls,
+        uri: str,
+        session: requests_cache.CachedSession,
+        ) -> Iterator[ str ]:
+        """
+Iterate through the links in a given `sitemap.xml` page.
+        """
+        try:
+            xml = session.get(uri, timeout = 10).text
+            tree = ElementTree.XML(xml)
+
+            for node in tree:
+                yield node[0].text  # type: ignore
+        except Exception as ex:  # pylint: disable=W0718
+            print(ex, uri)
 
 
     def get_scheme (
@@ -44,39 +113,17 @@ Accessor for the HTTP scheme component of a URL.
         return urlparse(self.uri).scheme.lower()
 
 
-    def add_ref (
-        self,
-        ref: typing.Optional[ str ],
-        ) -> None:
-        """
-Add a back-reference link.
-        """
-        if ref is not None:
-            self.refs.add(ref)
-
-
-class ExternalPage (Page):
-    """
-A data class representing one external HTML page.
-    """
-    slug: typing.Optional[ str ] = None
-
-
-class InternalPage (Page):
-    """
-A data class representing one internal HTML page.
-    """
-    path: str
-    outbound: typing.Set[ str ] = set([])
-
-
-    def __repr__ (
-        self,
+    @classmethod
+    def get_path (
+        cls,
+        uri: str,
+        *,
+        base: str = "https://example.com/"
         ) -> str:
         """
-Represent object as a string.
+Extract the path for an internal URL.
         """
-        return self.path
+        return uri.replace(base, "").strip().split("#")[0]
 
 
     def normalize (
@@ -94,31 +141,99 @@ Normalize the URL to represent an internal HTML page.
 
 
     @classmethod
-    def get_path (
+    def validate_link (
         cls,
         uri: str,
-        *,
-        base: str = "https://example.com/"
-        ) -> str:
+        path: str,
+        ) -> typing.Optional[ str ]:
         """
-Extract the path for an internal URL.
+Filter valid links.
         """
-        return uri.replace(base, "").strip().split("#")[0]
+        if not (uri.startswith("#") or uri in [ "." ]):
+            if uri.startswith("http") or uri.startswith("data:") or uri.startswith("/"):
+                return uri
+
+            return f"{path}{uri}"
+
+        return None
 
 
-    @classmethod
-    def get_site_links (
-        cls,
-        uri: str,
+    def extract_links (
+        self,
+        html: str,
         ) -> Iterator[ str ]:
         """
-Iterate through the links in a given `sitemap.xml` page.
+Extract all the links from an HTML document.
         """
-        try:
-            xml = requests.get(uri, timeout = 10).text
-            tree = ElementTree.XML(xml)
+        soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
 
-            for node in tree:
-                yield node[0].text  # type: ignore
-        except Exception as ex:  # pylint: disable=W0718
-            print(ex, uri)
+        for tag in soup.find_all("a"):
+            if "href" in tag.attrs:  # type: ignore
+                uri: typing.Optional[ str ] = self.validate_link(tag.attrs["href"], self.path)  # type: ignore  # pylint: disable=C0301
+
+                if uri is not None:
+                    yield uri
+
+        for tag in soup.find_all("img"):
+            if "src" in tag.attrs:  # type: ignore
+                uri = self.validate_link(tag.attrs["src"], self.path)  # type: ignore
+
+                if uri is not None:
+                    yield uri
+
+        for tag in soup.find_all("iframe"):
+            if "src" in tag.attrs:  # type: ignore
+                uri = self.validate_link(tag.attrs["src"], self.path)  # type: ignore
+
+                if uri is not None:
+                    yield uri
+
+
+    def add_ref (
+        self,
+        ref: typing.Optional[ str ],
+        slug: typing.Optional[ str ] = None,
+        ) -> None:
+        """
+Add a back-reference link.
+        """
+        if ref is not None:
+            if slug is not None:
+                self.refs.add(ref)
+            else:
+                self.raw_refs.add(ref)
+
+
+    async def request_content (
+        self,
+        session: requests_cache.CachedSession,
+        *,
+        debug: bool = False,
+        ) -> typing.Optional[ str ]:
+        """
+Request URI to get HTML, status_code, content_type
+        """
+        html: typing.Optional[ str ] = None
+
+        try:
+            response: requests.Response = session.get(  # type: ignore
+                self.uri,
+                timeout = 10,
+                headers = {
+                    "User-Agent": "Custom",
+                },
+            )
+
+            html = response.text
+            self.status_code = response.status_code
+
+            if "content-type" in response.headers:
+                self.content_type = response.headers.get("content-type").split(";")[0]  # type: ignore  # pylint: disable=C0301
+
+            if debug or True:  # pylint: disable=R1727
+                ic(self.status_code, self.uri, response.headers, self.content_type)
+
+        except requests.exceptions.Timeout:
+            print("timed out", self.uri)
+
+        return html

@@ -6,6 +6,6 @@ Package definitions for Nyddu.
 see copyright/license https://github.com/DerwenAI/nyddu/README.md
 """
 
-from .crawler import Crawler, ShortenedURL, URLKind
+from .crawler import Crawler
 
-from .page import InternalPage, ExternalPage, Page
+from .page import Page, ShortenedURL, URLKind
