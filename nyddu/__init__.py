@@ -6,5 +6,5 @@ Package definitions for Nyddu.
 see copyright/license https://github.com/DerwenAI/nyddu/README.md
 """
 
-from .objects import Page
+from .page import InternalPage, ExternalPage, Page
 
