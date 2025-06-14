@@ -9,6 +9,7 @@ see copyright/license https://github.com/DerwenAI/nyddu/README.md
 from collections.abc import Iterator
 from urllib.parse import urlparse
 import enum
+import sys  # pylint: disable=W0611
 import typing
 import uuid
 
@@ -101,7 +102,7 @@ Iterate through the links in a given `sitemap.xml` page.
             for node in tree:
                 yield node[0].text  # type: ignore
         except Exception as ex:  # pylint: disable=W0718
-            print(ex, uri)
+            print("OH FUCK!", ex, uri)
 
 
     def get_scheme (
@@ -126,20 +127,6 @@ Extract the path for an internal URL.
         return uri.replace(base, "").strip().split("#")[0]
 
 
-    def normalize (
-        self,
-        *,
-        base: str = "https://example.com/"
-        ) -> None:
-        """
-Normalize the URL to represent an internal HTML page.
-        """
-        self.uri = self.uri.split("#")[0]
-
-        if not self.uri.startswith(base):
-            self.uri = f"{base}{self.uri}"
-
-
     @classmethod
     def validate_link (
         cls,
@@ -152,6 +139,9 @@ Filter valid links.
         if not (uri.startswith("#") or uri in [ "." ]):
             if uri.startswith("http") or uri.startswith("data:") or uri.startswith("/"):
                 return uri
+
+            if not path.endswith("/"):
+                path = f"{path}/"
 
             return f"{path}{uri}"
 
@@ -216,7 +206,9 @@ Request URI to get HTML, status_code, content_type
         html: typing.Optional[ str ] = None
 
         try:
-            response: requests.Response = session.get(  # type: ignore
+            assert self.uri is not None
+
+            response: requests.Response = session.get(
                 self.uri,
                 timeout = 10,
                 headers = {
@@ -224,16 +216,23 @@ Request URI to get HTML, status_code, content_type
                 },
             )
 
-            html = response.text
-            self.status_code = response.status_code
+            assert response is not None
 
-            if "content-type" in response.headers:
+            self.status_code = response.status_code
+            html = response.text
+
+            if response.headers is not None and "content-type" in response.headers:
                 self.content_type = response.headers.get("content-type").split(";")[0]  # type: ignore  # pylint: disable=C0301
 
             if debug or True:  # pylint: disable=R1727
-                ic(self.status_code, self.uri, response.headers, self.content_type)
+                ic(self.status_code, self.uri, self.content_type)
+
+            if self.status_code not in [ 200 ]:
+                sys.exit(0)
 
         except requests.exceptions.Timeout:
             print("timed out", self.uri)
+        except Exception as ex:  # pylint: disable=W0718
+            ic("WTF?", ex, self.uri)
 
         return html

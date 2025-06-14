@@ -7,7 +7,10 @@ see copyright/license https://github.com/DerwenAI/nyddu/README.md
 """
 
 import asyncio
+import posixpath
+import sys  # pylint: disable=W0611
 import typing
+import urllib.parse
 import warnings
 
 from icecream import ic  # type: ignore
@@ -70,7 +73,7 @@ previous serialized cache from disk.
         debug: bool = False,
         ) -> None:
         """
-Coroutine to load URIs into the queue.
+Load one URI into the queue.
         """
         kind: URLKind = URLKind.INTERNAL
         slug: typing.Optional[ str ] = None
@@ -81,9 +84,6 @@ Coroutine to load URIs into the queue.
             if kind in [ URLKind.INTERNAL, URLKind.EXTERNAL ]:
                 slug = uri
                 uri = self.shorty[uri].expanded_uri
-            else:
-                ## fuck: handle shows
-                pass
 
         if uri.startswith("#") or uri.startswith("data:"):
             # ignore internal anchors and data URLs (for now)
@@ -91,16 +91,28 @@ Coroutine to load URIs into the queue.
 
         elif uri.startswith("/") or uri.startswith(self.site_base):
             # normalize internal links to just their path
+            if uri.startswith("/"):
+                uri = f"{self.site_base}{uri}"
+
+            parsed = urllib.parse.urlparse(uri)
+            normalized = posixpath.normpath(parsed.path)
+            uri = parsed._replace(path = normalized).geturl()
+
+            uri = uri.split("#")[0]
+            uri = uri.split("?")[0]
+
+            # determine a canonical path
             path: str = Page.get_path(
                 uri,
                 base = self.site_base,
             )
 
+            # filter out URLs to be ignored
             if path in self.path_rewrites:
                 path = self.path_rewrites[path]
 
             if path in self.ignored_paths:
-                # fuck: is this really one of ours?
+                # fuck: double-check is this really one of ours?
                 #self.outbound[u] = "?"
                 pass
 
@@ -120,10 +132,6 @@ Coroutine to load URIs into the queue.
                     slug = slug,
                 )
 
-                page.normalize(
-                    base = self.site_base,
-                )
-
                 self.known_pages[path] = page
 
                 if ref is not None:
@@ -131,7 +139,7 @@ Coroutine to load URIs into the queue.
                     ref.outbound.add(path)
 
                 if debug or True:  # pylint: disable=R1727
-                    ic("LOAD", page)
+                    ic("LOAD", page, ref)
 
                 await self.queue.put(page)
 
@@ -159,6 +167,17 @@ Coroutine to load URIs into the queue.
                 ref.outbound.add(uri)
 
 
+    async def produce_tasks (
+        self,
+        site_map: str = "https://example.com",
+        ) -> None:
+        """
+Coroutine to produce URLs into the queue.
+        """
+        for uri in Page.get_site_links(site_map, self.session):
+            await self.load_queue(uri, None)
+
+
     async def consume_tasks (
         self,
         *,
@@ -170,22 +189,27 @@ Coroutine to consume URLs from the queue.
         if debug:
             print("QUEUE status: start")
 
-        while True:
-            page: typing.Optional[ Page ] = await self.queue.get()
-
-            if page is None:
-                print("QUEUE size at end:", self.queue.qsize())
-                break
+        while not self.queue.empty():
+            page: Page = await self.queue.get()
 
             # crawl!
             if debug:
-                print(f">got {page}")
+                print(f">got {page.kind} {page.uri} {page.path}")
 
-            html: typing.Optional[ str ] = await page.request_content(self.session)
+            assert page is not None
 
-            if html is not None and page.content_type in [ "text/html" ]:
-                for emb_uri in page.extract_links(html):
-                    await self.load_queue(emb_uri, page)
+            if page.path in self.shorty:
+                ## fuck: handle shows
+                page.kind = self.shorty[page.path].kind
+
+            if page.kind in [ URLKind.INTERNAL ]:
+                html: typing.Optional[ str ] = await page.request_content(self.session)
+
+                if html is not None and page.content_type in [ "text/html" ]:
+                    for emb_uri in page.extract_links(html):
+                        await self.load_queue(emb_uri, page)
+
+            self.queue.task_done()
 
         if debug:
             print("QUEUE status: all done")
@@ -198,12 +222,7 @@ Coroutine to consume URLs from the queue.
         """
 Crawler entry point coroutine.
         """
-        for uri in Page.get_site_links(site_map, self.session):
-            await self.load_queue(uri, None)
-
-        # send an "all done" signal
-        await self.queue.put(None)
-        await asyncio.gather(self.consume_tasks())
+        await asyncio.gather(self.produce_tasks(site_map), self.consume_tasks())
 
 
     def report (

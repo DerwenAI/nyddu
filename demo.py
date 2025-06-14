@@ -8,7 +8,7 @@ Demo script.
 import asyncio
 import json
 import pathlib
-import sys
+import sys  # pylint: disable=W0611
 import typing
 
 from icecream import ic
@@ -51,11 +51,23 @@ if __name__ == "__main__":
         },
         ignored_paths = set([
             "/articles",
+            "/auth/account",
             "/auth/login",
-            "/merch",
             "/cdn-cgi/l/email-protection",
+            "/cysoni",
+            "/docs/kgl",
+            "/docs/kgl/",
+            "/docs/kgl/learn",
+            "/docs/ptr",
+            "/docs/ptr/",
+            "/docs/txg",
+            "/docs/txg/",
+            "/liber118_tboo",
+            "/merch",
+            "/newsletter",
             "/robots.txt",
             "/sitemap.xml",
+            "/uptime",
         ]),
         shorty = shorty,
     )
