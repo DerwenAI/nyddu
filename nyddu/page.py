@@ -9,13 +9,13 @@ see copyright/license https://github.com/DerwenAI/nyddu/README.md
 from collections.abc import Iterator
 from urllib.parse import urlparse
 import enum
+import logging
 import sys  # pylint: disable=W0611
 import typing
-import uuid
 
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree
-from icecream import ic  # type: ignore
+from icecream import ic  # type: ignore  # pylint: disable=W0611
 from pydantic import BaseModel
 import requests
 import requests_cache
@@ -63,7 +63,6 @@ A data class representing one HTML page.
     """
     uri: str
     kind: URLKind
-    uid: str = str(uuid.uuid4())
     path: typing.Optional[ str ] = None
     slug: typing.Optional[ str ] = None
     content_type: typing.Optional[ str ] = None
@@ -86,6 +85,24 @@ Represent object as a string.
                 return self.uri
 
 
+    def to_json (
+        self,
+        ) -> dict:
+        """
+Represent data for serialization.
+        """
+        return {
+            "uri": self.uri,
+            "kind": self.kind.value,
+            "path": self.path,
+            "slug": self.slug,
+            "type": self.content_type,
+            "status": self.status_code,
+            "outbound": list(self.outbound),
+            "refs": list(self.refs),
+            "raw": list(self.raw_refs),
+        }
+
     @classmethod
     def get_site_links (
         cls,
@@ -96,13 +113,14 @@ Represent object as a string.
 Iterate through the links in a given `sitemap.xml` page.
         """
         try:
-            xml = session.get(uri, timeout = 10).text
-            tree = ElementTree.XML(xml)
+            xml: str = session.get(uri, timeout = 10).text
+            tree: ElementTree.Element = ElementTree.XML(xml)
 
             for node in tree:
                 yield node[0].text  # type: ignore
         except Exception as ex:  # pylint: disable=W0718
-            print("OH FUCK!", ex, uri)
+            message: str = f"bad site links: {uri} : {ex}"
+            logging.error(message)
 
 
     def get_scheme (
@@ -197,8 +215,6 @@ Add a back-reference link.
     async def request_content (
         self,
         session: requests_cache.CachedSession,
-        *,
-        debug: bool = False,
         ) -> typing.Optional[ str ]:
         """
 Request URI to get HTML, status_code, content_type
@@ -224,15 +240,18 @@ Request URI to get HTML, status_code, content_type
             if response.headers is not None and "content-type" in response.headers:
                 self.content_type = response.headers.get("content-type").split(";")[0]  # type: ignore  # pylint: disable=C0301
 
-            if debug or True:  # pylint: disable=R1727
-                ic(self.status_code, self.uri, self.content_type)
+            message: str = f"{self.status_code} {self.content_type} {self.uri}"
+            logging.debug(message)
 
             if self.status_code not in [ 200 ]:
+                logging.error(message)
                 sys.exit(0)
 
         except requests.exceptions.Timeout:
-            print("timed out", self.uri)
+            message = f"request timeout: {self.uri}"
+            logging.error(message)
         except Exception as ex:  # pylint: disable=W0718
-            ic("WTF?", ex, self.uri)
+            message = f"request error: {self.uri} : {ex}"
+            logging.error(message)
 
         return html

@@ -7,13 +7,14 @@ see copyright/license https://github.com/DerwenAI/nyddu/README.md
 """
 
 import asyncio
+import logging
 import posixpath
 import sys  # pylint: disable=W0611
 import typing
 import urllib.parse
 import warnings
 
-from icecream import ic  # type: ignore
+from icecream import ic  # type: ignore  # pylint: disable=W0611
 import requests_cache
 import w3lib.url
 
@@ -30,6 +31,7 @@ A spider-ish crawler.
         site_base: str = "https://example.com",
         path_rewrites: typing.Dict[ str, str ] = {},
         ignored_paths: typing.Set[ str ] = set([]),
+        ignored_prefix: typing.List[ str ] = [],
         shorty: typing.Dict[ str, ShortenedURL ] = {},
         ) -> None:
         """
@@ -39,6 +41,7 @@ Constructor.
         self.site_base: str = site_base
         self.path_rewrites: typing.Dict[ str, str ] = path_rewrites
         self.ignored_paths: typing.Set[ str ] = ignored_paths
+        self.ignored_prefix: typing.List[ str ] = ignored_prefix
         self.shorty: typing.Dict[ str, ShortenedURL ] = shorty
 
         # runtime data structures
@@ -57,7 +60,7 @@ previous serialized cache from disk.
         # NB: these parameters should move into config
 
         session: requests_cache.CachedSession = requests_cache.CachedSession(
-            backend = requests_cache.SQLiteCache("nyddu.cache"),
+            backend = requests_cache.SQLiteCache("cache.nyddu"),
         )
 
         session.settings.expire_after = 360
@@ -69,8 +72,6 @@ previous serialized cache from disk.
         self,
         uri: str,
         ref: typing.Optional[ Page ],
-        *,
-        debug: bool = False,
         ) -> None:
         """
 Load one URI into the queue.
@@ -94,10 +95,9 @@ Load one URI into the queue.
             if uri.startswith("/"):
                 uri = f"{self.site_base}{uri}"
 
-            parsed = urllib.parse.urlparse(uri)
-            normalized = posixpath.normpath(parsed.path)
-            uri = parsed._replace(path = normalized).geturl()
-
+            parsed: urllib.parse.ParseResult = urllib.parse.urlparse(uri)
+            normalized_path: str = posixpath.normpath(parsed.path)
+            uri = parsed._replace(path = normalized_path).geturl()
             uri = uri.split("#")[0]
             uri = uri.split("?")[0]
 
@@ -111,9 +111,18 @@ Load one URI into the queue.
             if path in self.path_rewrites:
                 path = self.path_rewrites[path]
 
+            ignore: bool = False
+
             if path in self.ignored_paths:
                 # fuck: double-check is this really one of ours?
-                #self.outbound[u] = "?"
+                ignore = True
+
+            for prefix in self.ignored_prefix:
+                if path.startswith(prefix):
+                    ignore = True
+                    break
+
+            if ignore:
                 pass
 
             elif path in self.known_pages:
@@ -138,8 +147,8 @@ Load one URI into the queue.
                     page.add_ref(ref.path, slug)
                     ref.outbound.add(path)
 
-                if debug or True:  # pylint: disable=R1727
-                    ic("LOAD", page, ref)
+                message: str = f"load: {page.uri} {ref}"
+                logging.debug(message)
 
                 await self.queue.put(page)
 
@@ -148,7 +157,8 @@ Load one URI into the queue.
             uri = w3lib.url.canonicalize_url(uri)
 
             if not uri.startswith("http"):
-                ic("WTF!!!", uri, ref)
+                message = f"unknown scheme: {uri} {ref}"
+                logging.error(message)
 
             if uri not in self.known_pages:
                 page = Page(
@@ -180,23 +190,19 @@ Coroutine to produce URLs into the queue.
 
     async def consume_tasks (
         self,
-        *,
-        debug: bool = True,
         ) -> None:
         """
 Coroutine to consume URLs from the queue.
         """
-        if debug:
-            print("QUEUE status: start")
+        logging.info("queue start")
 
         while not self.queue.empty():
             page: Page = await self.queue.get()
+            assert page is not None
 
             # crawl!
-            if debug:
-                print(f">got {page.kind} {page.uri} {page.path}")
-
-            assert page is not None
+            message: str = f"task: {page.kind} {page.uri} {page.path}"
+            logging.debug(message)
 
             if page.path in self.shorty:
                 ## fuck: handle shows
@@ -211,8 +217,7 @@ Coroutine to consume URLs from the queue.
 
             self.queue.task_done()
 
-        if debug:
-            print("QUEUE status: all done")
+        logging.info("queue done")
 
 
     async def crawl (
@@ -227,11 +232,13 @@ Crawler entry point coroutine.
 
     def report (
         self,
-        ) -> None:
+        ) -> list:
         """
 Report results.
         """
-        for uri, page in sorted(self.known_pages.items()):
-            with warnings.catch_warnings(action = "ignore"):
-                print(uri)
-                ic(page.model_dump())
+        with warnings.catch_warnings(action = "ignore"):
+            return [
+                page.to_json()
+                for _, page in sorted(self.known_pages.items())
+            ]
+

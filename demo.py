@@ -7,11 +7,12 @@ Demo script.
 
 import asyncio
 import json
+import logging
 import pathlib
 import sys  # pylint: disable=W0611
 import typing
 
-from icecream import ic
+from icecream import ic  # type: ignore  # pylint: disable=W0611
 from pyinstrument import Profiler
 import w3lib.url
 
@@ -19,6 +20,12 @@ from nyddu import Crawler, ShortenedURL, URLKind
 
 
 if __name__ == "__main__":
+    # set up logger
+    logging.basicConfig(
+        encoding = "utf-8",
+        level = logging.INFO,
+    )
+
     # load the shortened URLs
     shorty: typing.Dict[ str, ShortenedURL ] = {}
 
@@ -29,7 +36,6 @@ if __name__ == "__main__":
 
                 if val.startswith("urn:"):
                     shorty[uri] = ShortenedURL(uri, val, URLKind.URN)
-                    ic(shorty[uri])
 
                 elif val.startswith("https://derwen.ai"):
                     shorty[uri] = ShortenedURL(uri, val, URLKind.INTERNAL)
@@ -51,24 +57,18 @@ if __name__ == "__main__":
         },
         ignored_paths = set([
             "/articles",
-            "/auth/account",
-            "/auth/login",
             "/cdn-cgi/l/email-protection",
             "/cysoni",
-            "/docs/kgl",
-            "/docs/kgl/",
-            "/docs/kgl/learn",
-            "/docs/ptr",
-            "/docs/ptr/",
-            "/docs/txg",
-            "/docs/txg/",
             "/liber118_tboo",
             "/merch",
             "/newsletter",
-            "/robots.txt",
             "/sitemap.xml",
             "/uptime",
         ]),
+        ignored_prefix = [
+            "/docs/",
+            "/auth/",
+        ],
         shorty = shorty,
     )
 
@@ -78,9 +78,12 @@ if __name__ == "__main__":
         )
     )
 
+    #sys.exit(0)
+
     ## end code profiling
     profiler.stop()
 
-    #sys.exit(0)
-    crawler.report()
+    with open(pathlib.Path("report"), "w", encoding = "utf-8") as fp:
+        fp.write(json.dumps(crawler.report(), sort_keys = True, indent = 2))
+
     profiler.print()

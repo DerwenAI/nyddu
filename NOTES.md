@@ -1,5 +1,4 @@
 
 ## TODO list:
 
-  * filter URL startswith or regex?
-  
+  * use a TOML config file

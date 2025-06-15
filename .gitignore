@@ -1,6 +1,8 @@
 # local files
 *~
-nyddu.cache
+cache.nyddu
+cache.sqlite
+report
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
