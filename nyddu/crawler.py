@@ -8,8 +8,10 @@ see copyright/license https://github.com/DerwenAI/nyddu/README.md
 
 import asyncio
 import logging
+import pathlib
 import posixpath
 import sys  # pylint: disable=W0611
+import tomllib
 import typing
 import urllib.parse
 import warnings
@@ -28,6 +30,7 @@ A spider-ish crawler.
     def __init__ (  # pylint: disable=W0102
         self,
         *,
+        config_path: typing.Optional[ pathlib.Path ] = None,
         site_base: str = "https://example.com",
         path_rewrites: typing.Dict[ str, str ] = {},
         ignored_paths: typing.Set[ str ] = set([]),
@@ -38,6 +41,9 @@ A spider-ish crawler.
 Constructor.
         """
         # configuration
+        with open(config_path, mode = "rb") as fp:
+            self.config = tomllib.load(fp)
+
         self.site_base: str = site_base
         self.path_rewrites: typing.Dict[ str, str ] = path_rewrites
         self.ignored_paths: typing.Set[ str ] = ignored_paths

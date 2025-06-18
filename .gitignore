@@ -2,6 +2,8 @@
 *~
 cache.nyddu
 cache.sqlite
+config.toml
+db/
 report
 
 # Byte-compiled / optimized / DLL files
