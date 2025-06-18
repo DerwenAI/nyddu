@@ -20,7 +20,7 @@ from nyddu import Crawler, ShortenedURL, URLKind
 
 
 if __name__ == "__main__":
-    # set up logger
+    # set up logging
     logging.basicConfig(
         encoding = "utf-8",
         level = logging.INFO,
@@ -44,13 +44,13 @@ if __name__ == "__main__":
                     val = w3lib.url.canonicalize_url(val)
                     shorty[uri] = ShortenedURL(uri, val, URLKind.EXTERNAL)
 
-    ## start code profiling
+    # start code profiling
     profiler: Profiler = Profiler()
     profiler.start()
 
     # run the crawler
     crawler: Crawler = Crawler(
-        site_base = "https://derwen.ai",
+        config_path = pathlib.Path("config.toml"),
         path_rewrites = {
             "/rates": "/flywheel",
             "/watchlist": "/events",
@@ -73,17 +73,22 @@ if __name__ == "__main__":
     )
 
     asyncio.run(
-        crawler.crawl(
-            site_map = "https://derwen.ai/sitemap.xml",
-        )
+        crawler.crawl()
     )
 
     #sys.exit(0)
 
-    ## end code profiling
+    # end code profiling
     profiler.stop()
 
+    # serialize intermediate data / report
     with open(pathlib.Path("report"), "w", encoding = "utf-8") as fp:
-        fp.write(json.dumps(crawler.report(), sort_keys = True, indent = 2))
+        fp.write(
+            json.dumps(
+                crawler.report(),
+                sort_keys = True,
+                indent = 2,
+            )
+        )
 
     profiler.print()

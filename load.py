@@ -64,7 +64,10 @@ Format the data for one row, so that neither Polars nor Pandas loose their minds
         "type": page["type"],
         "path": page["path"],
         "slug": page["slug"],
-        "embedding": model.encode(page["uri"]).tolist(),
+        "title": page["title"],
+        "summary": page["summary"],
+        "thumbnail": page["thumbnail"],
+        "embedding": model.encode(page["title"]).tolist(),
     }
 
 
@@ -104,6 +107,9 @@ CREATE NODE TABLE Page(
     type STRING,
     path STRING,
     slug STRING,
+    title STRING,
+    summary STRING,
+    thumbnail STRING,
     embedding FLOAT[384]
 );
     """)
@@ -124,6 +130,7 @@ CREATE REL TABLE Link(
     df_page = pd.DataFrame([
         verify_page(page, model)
         for page in dat
+        if page["title"] is not None
     ])
     ic(df_page)
 
@@ -179,7 +186,7 @@ COPY Page FROM df_page
         """
     CALL CREATE_VECTOR_INDEX(
         'Page',
-        'uri_vec_index',
+        'title_vec_index',
         'embedding'
     );
         """
@@ -193,11 +200,11 @@ COPY Page FROM df_page
         """
     CALL QUERY_VECTOR_INDEX(
         'Page',
-        'uri_vec_index',
+        'title_vec_index',
         $query_vector,
         2
     )
-    RETURN node.uri ORDER BY distance;
+    RETURN node.uri, node.title ORDER BY distance;
         """,
         { "query_vector": query_vector, },
     )
@@ -206,10 +213,10 @@ COPY Page FROM df_page
 
     result = conn.execute(
         """
-    CALL QUERY_VECTOR_INDEX('page', 'uri_vec_index', $query_vector, 2)
+    CALL QUERY_VECTOR_INDEX('page', 'title_vec_index', $query_vector, 2)
     WITH node AS p, distance
     MATCH (p)-[:Link]->(dst:Page)
-    RETURN p.uri, dst.uri, distance
+    RETURN p.uri, dst.uri, p.title, distance
     ORDER BY distance LIMIT 50;
         """,
         { "query_vector": query_vector, },

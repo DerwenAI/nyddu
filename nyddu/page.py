@@ -12,6 +12,7 @@ import enum
 import logging
 import sys  # pylint: disable=W0611
 import typing
+import xml
 
 from bs4 import BeautifulSoup
 from defusedxml import ElementTree
@@ -67,6 +68,10 @@ A data class representing one HTML page.
     slug: typing.Optional[ str ] = None
     content_type: typing.Optional[ str ] = None
     status_code: typing.Optional[ int ] = None
+    title: typing.Optional[ str ] = None
+    summary: typing.Optional[ str ] = None
+    thumbnail: typing.Optional[ str ] = None
+    keywords: typing.Set[ str ] = set([])
     outbound: typing.Set[ str ] = set([])
     refs: typing.Set[ str ] = set([])
     raw_refs: typing.Set[ str ] = set([])
@@ -98,10 +103,15 @@ Represent data for serialization.
             "slug": self.slug,
             "type": self.content_type,
             "status": self.status_code,
+            "title": self.title,
+            "summary": self.summary,
+            "thumbnail": self.thumbnail,
+            "keywords": list(self.keywords),
             "outbound": list(self.outbound),
             "refs": list(self.refs),
             "raw": list(self.raw_refs),
         }
+
 
     @classmethod
     def get_site_links (
@@ -113,8 +123,8 @@ Represent data for serialization.
 Iterate through the links in a given `sitemap.xml` page.
         """
         try:
-            xml: str = session.get(uri, timeout = 10).text
-            tree: ElementTree.Element = ElementTree.XML(xml)
+            xml_doc: str = session.get(uri, timeout = 10).text
+            tree: xml.etree.ElementTree.Element = ElementTree.XML(xml_doc)  # type: ignore
 
             for node in tree:
                 yield node[0].text  # type: ignore
@@ -143,6 +153,34 @@ Accessor for the HTTP scheme component of a URL.
 Extract the path for an internal URL.
         """
         return uri.replace(base, "").strip().split("#")[0]
+
+
+    def extract_meta (
+        self,
+        soup: BeautifulSoup,
+        ) -> None:
+        """
+Extract metadata from an HTML document.
+        """
+        self.title = soup.title.string  # type: ignore
+
+        for tag in soup.find_all("meta"):
+            if "content" in tag.attrs:  # type: ignore
+                if "property" in tag.attrs:  # type: ignore
+                    match tag.attrs["property"]:  # type: ignore
+                        case "og:image":
+                            self.thumbnail = tag.attrs["content"]  # type: ignore
+
+                elif "name" in tag.attrs:  # type: ignore
+                    match tag.attrs["name"]:  # type: ignore
+                        case "description":
+                            self.summary = tag.attrs["content"]  # type: ignore
+
+                        case "keywords":
+                            key_list: typing.Optional[ str ] = tag.attrs["content"]  # type: ignore
+
+                            if key_list is not None:
+                                self.keywords = { key.strip() for key in key_list.split(",") }
 
 
     @classmethod
@@ -174,6 +212,7 @@ Filter valid links.
 Extract all the links from an HTML document.
         """
         soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
+        self.extract_meta(soup)
 
         for tag in soup.find_all("a"):
             if "href" in tag.attrs:  # type: ignore

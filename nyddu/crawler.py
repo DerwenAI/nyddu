@@ -23,7 +23,7 @@ import w3lib.url
 from .page import Page, ShortenedURL, URLKind
 
 
-class Crawler:
+class Crawler:  # pylint: disable=R0902
     """
 A spider-ish crawler.
     """
@@ -31,7 +31,6 @@ A spider-ish crawler.
         self,
         *,
         config_path: typing.Optional[ pathlib.Path ] = None,
-        site_base: str = "https://example.com",
         path_rewrites: typing.Dict[ str, str ] = {},
         ignored_paths: typing.Set[ str ] = set([]),
         ignored_prefix: typing.List[ str ] = [],
@@ -41,10 +40,10 @@ A spider-ish crawler.
 Constructor.
         """
         # configuration
-        with open(config_path, mode = "rb") as fp:
+        with open(config_path, mode = "rb") as fp:  # type: ignore
             self.config = tomllib.load(fp)
 
-        self.site_base: str = site_base
+        self.site_base: str = self.config["nyddu"]["site_base"]
         self.path_rewrites: typing.Dict[ str, str ] = path_rewrites
         self.ignored_paths: typing.Set[ str ] = ignored_paths
         self.ignored_prefix: typing.List[ str ] = ignored_prefix
@@ -52,8 +51,11 @@ Constructor.
 
         # runtime data structures
         self.known_pages: typing.Dict[ str, Page ] = {}
-        self.queue: asyncio.Queue = asyncio.Queue(maxsize = 0)
         self.session: requests_cache.CachedSession = self.get_cache()
+
+        self.queue: asyncio.Queue = asyncio.Queue(
+            maxsize = self.config["nyddu"]["queue_maxsize"],
+            )
 
 
     def get_cache (
@@ -63,13 +65,13 @@ Constructor.
 Build a URL request cache session, optionally loading any
 previous serialized cache from disk.
         """
-        # NB: these parameters should move into config
-
         session: requests_cache.CachedSession = requests_cache.CachedSession(
-            backend = requests_cache.SQLiteCache("cache.nyddu"),
+            backend = requests_cache.SQLiteCache(
+                self.config["nyddu"]["cache_path"],
+            ),
         )
 
-        session.settings.expire_after = 360
+        session.settings.expire_after = self.config["nyddu"]["cache_expire"]
 
         return session
 
@@ -94,9 +96,9 @@ Load one URI into the queue.
 
         if uri.startswith("#") or uri.startswith("data:"):
             # ignore internal anchors and data URLs (for now)
-            pass
+            return
 
-        elif uri.startswith("/") or uri.startswith(self.site_base):
+        if uri.startswith("/") or uri.startswith(self.site_base):
             # normalize internal links to just their path
             if uri.startswith("/"):
                 uri = f"{self.site_base}{uri}"
@@ -117,21 +119,14 @@ Load one URI into the queue.
             if path in self.path_rewrites:
                 path = self.path_rewrites[path]
 
-            ignore: bool = False
-
-            if path in self.ignored_paths:
-                # fuck: double-check is this really one of ours?
-                ignore = True
-
             for prefix in self.ignored_prefix:
                 if path.startswith(prefix):
-                    ignore = True
-                    break
+                    return
 
-            if ignore:
-                pass
+            if path in self.ignored_paths:
+                return
 
-            elif path in self.known_pages:
+            if path in self.known_pages:
                 # add a back-reference
                 page: Page = self.known_pages[path]
 
@@ -228,12 +223,14 @@ Coroutine to consume URLs from the queue.
 
     async def crawl (
         self,
-        site_map: str = "https://example.com",
         ) -> None:
         """
 Crawler entry point coroutine.
         """
-        await asyncio.gather(self.produce_tasks(site_map), self.consume_tasks())
+        await asyncio.gather(
+            self.produce_tasks(self.config["nyddu"]["site_map"]),
+            self.consume_tasks(),
+        )
 
 
     def report (
@@ -247,4 +244,3 @@ Report results.
                 page.to_json()
                 for _, page in sorted(self.known_pages.items())
             ]
-
