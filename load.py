@@ -82,8 +82,8 @@ Main entry point
     with open(config_path, mode = "rb") as fp:
         config = tomllib.load(fp)
 
-    conn: kuzu.Connection = db_connect(db_path = pathlib.Path(config["nyddu"]["db_path"]))
-    model: SentenceTransformer = load_model(embed_model = config["nyddu"]["embed_model"])
+    conn: kuzu.Connection = db_connect(db_path = pathlib.Path(config["db"]["db_path"]))
+    model: SentenceTransformer = load_model(embed_model = config["db"]["embed_model"])
 
     # install and load vector extension
     # create tables
