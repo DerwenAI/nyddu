@@ -8,4 +8,8 @@ see copyright/license https://github.com/DerwenAI/nyddu/README.md
 
 from .crawler import Crawler
 
+from .db import db_connect, load_model
+
 from .page import Page, ShortenedURL, URLKind
+
+from .routes import NydduEndpoints

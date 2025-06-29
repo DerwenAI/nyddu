@@ -5,10 +5,8 @@
 Prototype the use of KùzuDB
 """
 
-import contextlib
 import json
 import pathlib
-import shutil
 import sys
 import tomllib
 import typing
@@ -19,30 +17,7 @@ from sentence_transformers import SentenceTransformer
 import kuzu
 import pandas as pd
 
-
-def db_connect (
-    *,
-    db_path: pathlib.Path = pathlib.Path("db"),
-    ) -> kuzu.Connection:
-    """
-Initialize a KùzuDB connection, removing any previous data if it exits.
-    """
-    with contextlib.suppress(FileNotFoundError):
-        shutil.rmtree(db_path)
-
-    return kuzu.Connection(kuzu.Database(db_path))
-
-
-def load_model (
-    *,
-    embed_model: str = "all-MiniLM-L6-v2",
-    ) -> SentenceTransformer:
-    """
-Load a pre-trained embedding generation model, defaulting to
-<https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2>
-for 384-dimensional embedding vectors.
-    """
-    return SentenceTransformer(embed_model)
+from nyddu import db_connect, load_model
 
 
 def verify_page (
@@ -82,8 +57,14 @@ Main entry point
     with open(config_path, mode = "rb") as fp:
         config = tomllib.load(fp)
 
-    conn: kuzu.Connection = db_connect(db_path = pathlib.Path(config["db"]["db_path"]))
-    model: SentenceTransformer = load_model(embed_model = config["db"]["embed_model"])
+    conn: kuzu.Connection = db_connect(
+        db_path = pathlib.Path(config["db"]["db_path"]),
+        clean = True,
+    )
+
+    model: SentenceTransformer = load_model(
+        embed_model = config["db"]["embed_model"],
+    )
 
     # install and load vector extension
     # create tables
