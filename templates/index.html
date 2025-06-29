@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link
+      rel="stylesheet"
+      href="https://cdn.datatables.net/2.2.2/css/dataTables.dataTables.css"
+      />
+    <style>
+/* fonts, icons */
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap");
+
+/* structural */
+html, h1, h2, h3, h4, h5, p, span, cite, figcaption, button, input, select, textarea {
+    font-family: "Atkinson Hyperlegible", sans-serif;
+}
+
+body {
+    color: hsl(0, 0%, 40%);
+}
+
+p {
+    font-weight: normal;
+    font-size: 1.1em;
+    line-height: 1.3em;
+    margin: 1.2em 0 1.2em 0;
+}
+
+a {
+    color: hsl(55, 17%, 49%);
+    background-color: white;
+    font-weight: bold;
+}
+
+a:visited {
+    color: hsl(55, 17%, 49%);
+    background-color: white;
+}
+
+a:hover {
+    color: white;
+    background-color: hsl(55, 17%, 49%);
+}
+
+a {
+    text-decoration: none !important;
+}
+
+.recipe_table_img {
+    height: 3em;
+}
+    </style>
+    <title>Crawled Pages</title>
+  </head>
+
+  <body>
+    <table id="page_table" class="display">
+      <thead>
+	<tr>
+	  <th>uri</th>
+	  <th>path</th>
+	  <th>slug</th>
+	  <th>status</th>
+	  <th>title</th>
+	  <th>summary</th>
+	</tr>
+      </thead>
+      <tbody>
+	{% for page in pages %}
+	<tr>
+	  <td>
+	    <a
+	      href="{{ page.uri }}"
+	      target="_blank"
+              >{{ page.uri }}</a>
+	  </td>
+	  <td>
+	    {{ page.path }}
+	  </td>
+	  <td>
+	    {{ page.slug }}
+	  </td>
+	  <td>
+	    {{ page.status }}
+	  </td>
+	  <td>
+	    {{ page.title }}
+	  </td>
+	  <td>
+	    {{ page.summary }}
+	  </td>
+	</tr>
+	{% endfor %}
+      </tbody>
+    </table>
+
+    <script
+      src="https://code.jquery.com/jquery-3.7.1.min.js"
+      integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+      crossorigin="anonymous"
+      ></script>
+    <script
+      src="https://cdn.datatables.net/2.2.2/js/dataTables.js"
+      ></script>
+    <script>
+$(document).ready(function() {
+    $("#page_table").DataTable({
+	order: [[ 0, "desc" ]],
+    });
+});
+    </script>
+  </body>
+</html>

@@ -11,12 +11,20 @@ import sys
 import tomllib
 import typing
 
-from fastapi import FastAPI  # pylint: disable=E0401
+from fastapi import FastAPI, Request  # pylint: disable=E0401
+from fastapi.responses import HTMLResponse  # pylint: disable=E0401,W0611
+from fastapi.templating import Jinja2Templates  # pylint: disable=E0401
 from icecream import ic
 from sentence_transformers import SentenceTransformer
 import kuzu
 import uvicorn  # pylint: disable=E0401
 
+
+TEMPLATES: Jinja2Templates = Jinja2Templates(
+    directory = ".",
+)
+
+PAGES: list = []
 
 APP: FastAPI = FastAPI(
     title = "Nyddu",
@@ -26,27 +34,20 @@ APP: FastAPI = FastAPI(
 
 @APP.get("/")
 def read_root (
-    ) -> dict:
+    request: Request,
+    ) -> HTMLResponse:
     """
-Example page route.
+Serve the home page.
     """
-    return {
-        "Hello": "World",
-    }
+    response: HTMLResponse = TEMPLATES.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "pages": PAGES,
+        },
+    )
 
-
-@APP.get("/items/{item_id}")
-def read_item (
-    item_id: int,
-    q: typing.Union[ str, None ] = None,
-    ) -> dict:
-    """
-Example API route.
-    """
-    return {
-        "item_id": item_id,
-        "q": q,
-    }
+    return response
 
 
 def db_connect (
@@ -79,24 +80,38 @@ if __name__ == "__main__":
     with open(config_path, mode = "rb") as fp:
         config = tomllib.load(fp)
 
+    TEMPLATES = Jinja2Templates(
+        directory = config["webapp"]["templates"],
+    )
+
     conn: kuzu.Connection = db_connect(db_path = pathlib.Path(config["db"]["db_path"]))
     model: SentenceTransformer = load_model(embed_model = config["db"]["embed_model"])
 
     result = conn.execute(
         """
     MATCH (p:Page)
-    RETURN p.id, p.uri, p.path, p.slug, p.type, p.status, p.title, p.summary
+    RETURN
+        p.id as id,
+        p.uri as uri,
+        p.path as path,
+        p.slug as slug,
+        p.type as type,
+        p.status as status,
+        p.title as title,
+        p.summary as summary
         """,
     )
 
-    dat: dict = result.get_as_df().to_json(
-        orient = "records",
-        lines = True,
-        indent = 2,
+    PAGES = json.loads(
+        result.get_as_df().to_json(
+            orient = "records",
+            #lines = True,
+            #indent = 2,
+        )
     )
 
-    print(dat)
-    sys.exit(0)
+    #print(PAGES)
+    #sys.exit(0)
 
     uvicorn.run(
         APP,
