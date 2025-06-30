@@ -13,16 +13,14 @@ import typing
 
 from icecream import ic
 from pyinstrument import Profiler
-from sentence_transformers import SentenceTransformer
 import kuzu
 import pandas as pd
 
-from nyddu import db_connect, load_model
+from nyddu import db_connect
 
 
 def verify_page (
     page: dict,
-    model: SentenceTransformer,
     ) -> dict:
     """
 Format the data for one row, so that neither Polars nor Pandas loose their minds.
@@ -42,7 +40,6 @@ Format the data for one row, so that neither Polars nor Pandas loose their minds
         "title": page["title"],
         "summary": page["summary"],
         "thumbnail": page["thumbnail"],
-        "embedding": model.encode(page["title"]).tolist(),
     }
 
 
@@ -60,10 +57,6 @@ Main entry point
     conn: kuzu.Connection = db_connect(
         db_path = pathlib.Path(config["db"]["db_path"]),
         clean = True,
-    )
-
-    model: SentenceTransformer = load_model(
-        embed_model = config["db"]["embed_model"],
     )
 
     # install and load vector extension
@@ -90,8 +83,7 @@ CREATE NODE TABLE Page(
     slug STRING,
     title STRING,
     summary STRING,
-    thumbnail STRING,
-    embedding FLOAT[384]
+    thumbnail STRING
 );
     """)
 
@@ -109,9 +101,8 @@ CREATE REL TABLE Link(
         dat: list = json.load(fp)
 
     df_page = pd.DataFrame([
-        verify_page(page, model)
+        verify_page(page)
         for page in dat
-        if page["title"] is not None
     ])
     ic(df_page)
 
@@ -158,52 +149,6 @@ COPY Page FROM df_page
             """,
             row,
         )
-
-    ######################################################################
-    ## vector search
-
-    # vector search indexing
-    conn.execute(
-        """
-    CALL CREATE_VECTOR_INDEX(
-        'Page',
-        'title_vec_index',
-        'embedding'
-    );
-        """
-    )
-
-    # vector search query
-    query: str = "paco"
-    query_vector: list = model.encode(query).tolist()
-
-    result: QueryResult = conn.execute(
-        """
-    CALL QUERY_VECTOR_INDEX(
-        'Page',
-        'title_vec_index',
-        $query_vector,
-        2
-    )
-    RETURN node.uri, node.title ORDER BY distance;
-        """,
-        { "query_vector": query_vector, },
-    )
-
-    ic(result.get_as_pl())
-
-    result = conn.execute(
-        """
-    CALL QUERY_VECTOR_INDEX('page', 'title_vec_index', $query_vector, 2)
-    WITH node AS p, distance
-    MATCH (p)-[:Link]->(dst:Page)
-    RETURN p.uri, dst.uri, p.title, distance
-    ORDER BY distance LIMIT 50;
-        """,
-        { "query_vector": query_vector, },
-    )
-
-    ic(result.get_as_pl())
 
     ## end code profiling
     profiler.stop()

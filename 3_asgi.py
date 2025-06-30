@@ -34,7 +34,7 @@ def home (
 Serve a default home page.
     """
     return {
-        "message": "Bienvenidos a Hotel California",
+        "message": "Bienvenido al Hotel California",
     }
 
 
