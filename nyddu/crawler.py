@@ -6,6 +6,7 @@ Crawler class for Nyddu.
 see copyright/license https://github.com/DerwenAI/nyddu/README.md
 """
 
+from http import HTTPStatus
 import asyncio
 import logging
 import pathlib
@@ -18,6 +19,7 @@ import warnings
 
 from icecream import ic  # type: ignore  # pylint: disable=W0611
 import requests_cache
+import urllib3
 import w3lib.url
 
 from .page import Page, ShortenedURL, URLKind
@@ -48,6 +50,9 @@ Constructor.
         self.ignored_paths: typing.Set[ str ] = ignored_paths
         self.ignored_prefix: typing.List[ str ] = ignored_prefix
         self.shorty: typing.Dict[ str, ShortenedURL ] = shorty
+
+        # configure warnings
+        urllib3.disable_warnings()
 
         # runtime data structures
         self.known_pages: typing.Dict[ str, Page ] = {}
@@ -212,9 +217,10 @@ Coroutine to consume URLs from the queue.
             if page.kind in [ URLKind.INTERNAL ]:
                 html: typing.Optional[ str ] = await page.request_content(self.session)
 
-                if html is not None and page.content_type in [ "text/html" ]:
-                    for emb_uri in page.extract_links(html):
-                        await self.load_queue(emb_uri, page)
+                if page.status_code in [ HTTPStatus.OK ]:
+                    if html is not None and page.content_type in [ "text/html" ]:
+                        for emb_uri in page.extract_links(html):
+                            await self.load_queue(emb_uri, page)
 
             self.queue.task_done()
 

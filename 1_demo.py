@@ -61,6 +61,7 @@ if __name__ == "__main__":
             "/cysoni",
             "/liber118_tboo",
             "/merch",
+            "/meet",
             "/newsletter",
             "/sitemap.xml",
             "/uptime",

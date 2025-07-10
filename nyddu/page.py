@@ -10,7 +10,9 @@ from collections.abc import Iterator
 from urllib.parse import urlparse
 import enum
 import logging
+import ssl
 import sys  # pylint: disable=W0611
+import traceback  # pylint: disable=W0611
 import typing
 import xml
 
@@ -20,6 +22,9 @@ from icecream import ic  # type: ignore  # pylint: disable=W0611
 from pydantic import BaseModel
 import requests
 import requests_cache
+
+
+FAUX_USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"  # pylint: disable=C0301
 
 
 class URLKind (enum.StrEnum):
@@ -68,6 +73,7 @@ A data class representing one HTML page.
     slug: typing.Optional[ str ] = None
     content_type: typing.Optional[ str ] = None
     status_code: typing.Optional[ int ] = None
+    redirect: typing.Optional[ str ] = None
     title: typing.Optional[ str ] = None
     summary: typing.Optional[ str ] = None
     thumbnail: typing.Optional[ str ] = None
@@ -103,6 +109,7 @@ Represent data for serialization.
             "slug": self.slug,
             "type": self.content_type,
             "status": self.status_code,
+            "redirect": self.redirect,
             "title": self.title,
             "summary": self.summary,
             "thumbnail": self.thumbnail,
@@ -162,7 +169,8 @@ Extract the path for an internal URL.
         """
 Extract metadata from an HTML document.
         """
-        self.title = soup.title.string  # type: ignore
+        if soup.title is not None:
+            self.title = soup.title.string  # type: ignore
 
         for tag in soup.find_all("meta"):
             if "content" in tag.attrs:  # type: ignore
@@ -254,6 +262,9 @@ Add a back-reference link.
     async def request_content (
         self,
         session: requests_cache.CachedSession,
+        *,
+        allow_redirects: bool = False,
+        user_agent: str = FAUX_USER_AGENT,
         ) -> typing.Optional[ str ]:
         """
 Request URI to get HTML, status_code, content_type
@@ -265,9 +276,11 @@ Request URI to get HTML, status_code, content_type
 
             response: requests.Response = session.get(
                 self.uri,
+                verify = ssl.CERT_NONE,
                 timeout = 10,
+                allow_redirects = allow_redirects,
                 headers = {
-                    "User-Agent": "Custom",
+                    "User-Agent": user_agent,
                 },
             )
 
@@ -276,20 +289,25 @@ Request URI to get HTML, status_code, content_type
             self.status_code = response.status_code
             html = response.text
 
-            if response.headers is not None and "content-type" in response.headers:
-                self.content_type = response.headers.get("content-type").split(";")[0]  # type: ignore  # pylint: disable=C0301
+            if response.headers is not None and response.headers.get("content-type") is not None:
+                content_type: typing.Optional[ str ] = response.headers.get("content-type")  # type: ignore  # pylint: disable=C0301
+
+                if content_type is not None:
+                    self.content_type = content_type.split(";")[0]
 
             message: str = f"{self.status_code} {self.content_type} {self.uri}"
             logging.debug(message)
 
-            if self.status_code not in [ 200 ]:
-                logging.error(message)
-                sys.exit(0)
+            ic(message)
+
+            if len(response.history) > 0:
+                self.redirect = response.url
 
         except requests.exceptions.Timeout:
             message = f"request timeout: {self.uri}"
             logging.error(message)
         except Exception as ex:  # pylint: disable=W0718
+            #traceback.print_exc()
             message = f"request error: {self.uri} : {ex}"
             logging.error(message)
 
