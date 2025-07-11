@@ -17,6 +17,7 @@ import typing
 import urllib.parse
 import warnings
 
+from bs4 import BeautifulSoup
 from icecream import ic  # type: ignore  # pylint: disable=W0611
 import requests_cache
 import urllib3
@@ -200,6 +201,7 @@ Coroutine to produce URLs into the queue.
         """
 Coroutine to consume URLs from the queue.
         """
+        count: int = 0
         logging.info("queue start")
 
         while not self.queue.empty():
@@ -214,17 +216,40 @@ Coroutine to consume URLs from the queue.
                 ## fuck: handle shows
                 page.kind = self.shorty[page.path].kind
 
-            if page.kind in [ URLKind.INTERNAL ]:
-                html: typing.Optional[ str ] = await page.request_content(self.session)
+            match page.kind:
+                case URLKind.INTERNAL:
+                    html: typing.Optional[ str ] = await page.request_content(
+                        self.session,
+                    )
 
-                if page.status_code in [ HTTPStatus.OK ]:
-                    if html is not None and page.content_type in [ "text/html" ]:
-                        for emb_uri in page.extract_links(html):
-                            await self.load_queue(emb_uri, page)
+                    if page.status_code in [ HTTPStatus.OK ]:
+                        if html is not None and page.content_type in [ "text/html" ]:
+                            count += 1
+                            logging.info(page.uri)
+
+                            for emb_uri in page.extract_links(html):
+                                await self.load_queue(emb_uri, page)
+
+                case URLKind.EXTERNAL:
+                    html: typing.Optional[ str ] = await page.request_content(
+                        self.session,
+                        allow_redirects = True,
+                    )
+
+                    if page.status_code not in [ HTTPStatus.NOT_FOUND ]:
+                        if html is not None and page.content_type in [ "text/html" ]:
+                            soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
+                            page.extract_meta(soup)
+
+                            count += 1
+                            logging.info(page.uri)
+
+                case _:
+                    ic("how to crawl?", page)
 
             self.queue.task_done()
 
-        logging.info("queue done")
+        logging.info(f"queue done: {count}")
 
 
     async def crawl (
