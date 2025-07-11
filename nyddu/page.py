@@ -12,6 +12,7 @@ import enum
 import logging
 import ssl
 import sys  # pylint: disable=W0611
+import time
 import traceback  # pylint: disable=W0611
 import typing
 import xml
@@ -74,6 +75,8 @@ A data class representing one HTML page.
     content_type: typing.Optional[ str ] = None
     status_code: typing.Optional[ int ] = None
     redirect: typing.Optional[ str ] = None
+    error: typing.Optional[ str ] = None
+    timing: float = 0.0
     title: typing.Optional[ str ] = None
     summary: typing.Optional[ str ] = None
     thumbnail: typing.Optional[ str ] = None
@@ -110,6 +113,8 @@ Represent data for serialization.
             "type": self.content_type,
             "status": self.status_code,
             "redirect": self.redirect,
+            "error": self.error,
+            "timing": round(self.timing, 3),
             "title": self.title,
             "summary": self.summary,
             "thumbnail": self.thumbnail,
@@ -269,6 +274,7 @@ Add a back-reference link.
         """
 Request URI to get HTML, status_code, content_type
         """
+        start_time: float = time.time()
         html: typing.Optional[ str ] = None
 
         try:
@@ -284,8 +290,6 @@ Request URI to get HTML, status_code, content_type
                 },
             )
 
-            assert response is not None
-
             self.status_code = response.status_code
             html = response.text
 
@@ -298,17 +302,19 @@ Request URI to get HTML, status_code, content_type
             message: str = f"{self.status_code} {self.content_type} {self.uri}"
             logging.debug(message)
 
-            ic(message)
-
             if len(response.history) > 0:
                 self.redirect = response.url
 
         except requests.exceptions.Timeout:
             message = f"request timeout: {self.uri}"
             logging.error(message)
+            self.error = message
         except Exception as ex:  # pylint: disable=W0718
             #traceback.print_exc()
             message = f"request error: {self.uri} : {ex}"
             logging.error(message)
+            self.error = message
+
+        self.timing = time.time() - start_time
 
         return html

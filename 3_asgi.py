@@ -59,12 +59,14 @@ if __name__ == "__main__":
     RETURN
         p.id as id,
         p.uri as uri,
-        p.path as path,
         p.slug as slug,
+        p.redirect as redirect,
         p.type as type,
         p.status as status,
         p.title as title,
-        p.summary as summary
+        p.summary as summary,
+        p.error as error,
+        p.timing as timing
         """,
     )
 

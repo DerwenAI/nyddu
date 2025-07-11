@@ -150,14 +150,14 @@ Load one URI into the queue.
 
                 self.known_pages[path] = page
 
-                if ref is not None:
-                    page.add_ref(ref.path, slug)
-                    ref.outbound.add(path)
-
                 message: str = f"load: {page.uri} {ref}"
                 logging.debug(message)
 
                 await self.queue.put(page)
+
+                if ref is not None:
+                    page.add_ref(ref.path, slug)
+                    ref.outbound.add(path)
 
         else:
             # a bona fide external link
@@ -175,6 +175,11 @@ Load one URI into the queue.
                 )
 
                 self.known_pages[uri] = page
+
+                message: str = f"load: {page.uri} {ref}"
+                logging.debug(message)
+
+                await self.queue.put(page)
 
             else:
                 page = self.known_pages[uri]
@@ -213,7 +218,7 @@ Coroutine to consume URLs from the queue.
             logging.debug(message)
 
             if page.path in self.shorty:
-                ## fuck: handle shows
+                ## FUCK: handle shows
                 page.kind = self.shorty[page.path].kind
 
             match page.kind:
@@ -225,7 +230,6 @@ Coroutine to consume URLs from the queue.
                     if page.status_code in [ HTTPStatus.OK ]:
                         if html is not None and page.content_type in [ "text/html" ]:
                             count += 1
-                            logging.info(page.uri)
 
                             for emb_uri in page.extract_links(html):
                                 await self.load_queue(emb_uri, page)
@@ -238,18 +242,18 @@ Coroutine to consume URLs from the queue.
 
                     if page.status_code not in [ HTTPStatus.NOT_FOUND ]:
                         if html is not None and page.content_type in [ "text/html" ]:
+                            count += 1
+
                             soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
                             page.extract_meta(soup)
-
-                            count += 1
-                            logging.info(page.uri)
 
                 case _:
                     ic("how to crawl?", page)
 
             self.queue.task_done()
 
-        logging.info(f"queue done: {count}")
+        logging.info(f"queue done: {count} / {len(self.known_pages)}")
+        ic(self.queue.qsize())
 
 
     async def crawl (

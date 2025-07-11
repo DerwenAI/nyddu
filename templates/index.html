@@ -47,8 +47,11 @@ a {
     text-decoration: none !important;
 }
 
-.recipe_table_img {
-    height: 3em;
+td {
+    height: 4em;
+    vertical-align: top;
+}
+
 }
     </style>
     <title>Crawled Pages</title>
@@ -59,9 +62,11 @@ a {
       <thead>
 	<tr>
 	  <th>uri</th>
-	  <th>path</th>
 	  <th>slug</th>
+	  <th>redirect</th>
 	  <th>status</th>
+	  <th>error</th>
+	  <th>timing</th>
 	  <th>title</th>
 	  <th>summary</th>
 	</tr>
@@ -73,22 +78,38 @@ a {
 	    <a
 	      href="{{ page.uri }}"
 	      target="_blank"
-              >{{ page.uri }}</a>
-	  </td>
-	  <td>
-	    {{ page.path }}
+              ><span title="{{ page.uri }}">
+		{{ page.uri | truncate(33, true) }}
+	    </span></a>
 	  </td>
 	  <td>
 	    {{ page.slug }}
 	  </td>
 	  <td>
+	    <span title="{{ page.redirect }}">
+	      {{ page.redirect | string | truncate(11) }}
+	    </span>
+	  </td>
+	  <td>
 	    {{ page.status }}
 	  </td>
 	  <td>
-	    {{ page.title }}
+	    <span title="{{ page.error }}">
+	      {{ page.error | string | truncate(11) }}
+	    </span>
 	  </td>
 	  <td>
-	    {{ page.summary }}
+	    {{ page.timing }}
+	  </td>
+	  <td>
+	    <span title="{{ page.title }}">
+	      {{ page.title | string | truncate(23) }}
+	    </span>
+	  </td>
+	  <td>
+	    <span title="{{ page.summary }}">
+	      {{ page.summary | string | truncate(11) }}
+	    </span>
 	  </td>
 	</tr>
 	{% endfor %}
@@ -107,6 +128,7 @@ a {
 $(document).ready(function() {
     $("#page_table").DataTable({
 	order: [[ 0, "desc" ]],
+	columnDefs: [{ width: "5%", targets: 0 }],
     });
 });
     </script>

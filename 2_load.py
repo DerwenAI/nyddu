@@ -44,9 +44,12 @@ Format the data for one row, so that neither Polars nor Pandas loose their minds
         "type": page["type"],
         "path": page["path"],
         "slug": page["slug"],
+        "redirect": page["redirect"],
         "title": page["title"],
         "summary": page["summary"],
         "thumbnail": page["thumbnail"],
+        "error": page["error"],
+        "timing": page["timing"],
         "embedding": embedding,
     }
 
@@ -91,9 +94,12 @@ CREATE NODE TABLE Page(
     type STRING,
     path STRING,
     slug STRING,
+    redirect STRING,
     title STRING,
     summary STRING,
     thumbnail STRING,
+    error STRING,
+    timing DOUBLE,
     embedding DOUBLE[384]
 );
     """)
