@@ -48,21 +48,106 @@ a {
 }
 
 td {
-    height: 4em;
+    height: 3.5em;
+    max-height: 4em;
     word-wrap: break-word;
     vertical-align: top;
 }
 
+/* uri
+ */
 th:nth-child(1) {
-    width: 23em;
-    max-width: 23em;
+    width: 20em;
+    max-width: 20em;
 }
 
 td:nth-child(1) {
-    width: 23em;
-    max-width: 23em;
+    width: 20em;
+    max-width: 20em;
 }
 
+/* slug
+ */
+th:nth-child(2) {
+    width: 8em;
+    max-width: 8em;
+}
+
+td:nth-child(2) {
+    width: 8em;
+    max-width: 8em;
+}
+
+/* redirect
+ */
+th:nth-child(3) {
+    width: 10em;
+    max-width: 10em;
+}
+
+td:nth-child(3) {
+    width: 10em;
+    max-width: 10em;
+}
+
+/* status
+ */
+th:nth-child(4) {
+    width: 7em;
+    max-width: 7em;
+}
+
+td:nth-child(4) {
+    width: 7em;
+    max-width: 7em;
+}
+
+/* error
+ */
+th:nth-child(5) {
+    width: 7em;
+    max-width: 7em;
+}
+
+td:nth-child(5) {
+    width: 7em;
+    max-width: 7em;
+}
+
+/* timing
+ */
+th:nth-child(6) {
+    width: 5.5em;
+    max-width: 5.5em;
+}
+
+td:nth-child(6) {
+    width: 5.5em;
+    max-width: 5.5em;
+}
+
+/* title
+ */
+th:nth-child(7) {
+    width: 15em;
+    max-width: 15em;
+}
+
+td:nth-child(7) {
+    width: 15em;
+    max-width: 15em;
+}
+
+/* summary
+ */
+th:nth-child(8) {
+    width: 15em;
+    max-width: 15em;
+}
+
+td:nth-child(8) {
+    width: 15em;
+    max-width: 15em;
 }
     </style>
     <title>Crawled Pages</title>
@@ -90,7 +175,7 @@ td:nth-child(1) {
 	      href="{{ page.uri }}"
 	      target="_blank"
               ><span title="{{ page.uri }}">
-		{{ page.uri | truncate(70, true) }}
+		{{ page.uri | string | truncate(50, true) }}
 	    </span></a>
 	  </td>
 	  <td>
@@ -98,7 +183,7 @@ td:nth-child(1) {
 	  </td>
 	  <td>
 	    <span title="{{ page.redirect }}">
-	      {{ page.redirect | string | truncate(11) }}
+	      {{ page.redirect | string | truncate(33, true) }}
 	    </span>
 	  </td>
 	  <td>
@@ -106,26 +191,34 @@ td:nth-child(1) {
 	  </td>
 	  <td>
 	    <span title="{{ page.error }}">
-	      {{ page.error | string | truncate(11) }}
+	      {{ page.error | string | truncate(15, true) }}
 	    </span>
 	  </td>
 	  <td>
-	    {{ page.timing }}
+	    {{ page.timing | round(2) }}
 	  </td>
 	  <td>
 	    <span title="{{ page.title }}">
-	      {{ page.title | string | truncate(23) }}
+	      {{ page.title | string | truncate(39, true) }}
 	    </span>
 	  </td>
 	  <td>
 	    <span title="{{ page.summary }}">
-	      {{ page.summary | string | truncate(11) }}
+	      {{ page.summary | string | truncate(39, true) }}
 	    </span>
 	  </td>
 	</tr>
 	{% endfor %}
       </tbody>
     </table>
+
+    <iframe
+      name="detail"
+      srcdoc="<em>click on an entry to load details</em>"
+      title="web page metadata details"
+      allowfullscreen="true"
+      width="100%"
+      ></iframe>
 
     <script
       src="https://code.jquery.com/jquery-3.7.1.min.js"
@@ -138,7 +231,14 @@ td:nth-child(1) {
     <script>
 $(document).ready(function() {
     $("#page_table").DataTable({
+        layout: {
+            topStart: "info",
+            topEnd: "search",
+            bottomStart: "pageLength",
+            bottomEnd: "paging",
+        },
         order: [[ 0, "desc" ]],
+        pageLength: 7,
     });
 });
     </script>
