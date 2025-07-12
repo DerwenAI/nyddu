@@ -73,6 +73,11 @@ Constructor.
             maxsize = self.config["nyddu"]["queue_maxsize"],
             )
 
+        self.scraper: Scraper = Scraper()
+
+        if not self.scraper.init_driver():
+            raise RuntimeError("could not initialize Chrome driver")
+
 
     def get_cache (
         self,
@@ -264,7 +269,7 @@ Crawl content for an external page.
 
         if page.content_type in [ "text/html" ]:
             if page.status_code not in FAIR_USE_STATUS:
-                html = await scraper.scrape_page(page.uri)
+                html = await self.scraper.scrape_page(page.uri)
 
             if html is not None and page.status_code not in [ HTTPStatus.NOT_FOUND ]:
                 self.count += 1
