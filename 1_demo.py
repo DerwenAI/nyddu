@@ -57,7 +57,6 @@ if __name__ == "__main__":
         },
         ignored_paths = set([
             "/articles",
-            "/cdn-cgi/l/email-protection",
             "/cysoni",
             "/liber118_tboo",
             "/merch",
@@ -67,8 +66,9 @@ if __name__ == "__main__":
             "/uptime",
         ]),
         ignored_prefix = [
-            "/docs/",
             "/auth/",
+            "/cdn-cgi/",
+            "/docs/",
         ],
         shorty = shorty,
     )

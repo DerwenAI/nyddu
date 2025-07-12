@@ -56,6 +56,7 @@ Constructor.
         urllib3.disable_warnings()
 
         # runtime data structures
+        self.count: int = 0
         self.known_pages: typing.Dict[ str, Page ] = {}
         self.session: requests_cache.CachedSession = self.get_cache()
 
@@ -82,7 +83,105 @@ previous serialized cache from disk.
         return session
 
 
-    async def load_queue (  # pylint: disable=R0912,R0915
+    async def load_queue_internal (
+        self,
+        uri: str,
+        ref: typing.Optional[ Page ],
+        slug: typing.Optional[ str ],
+        kind: URLKind,
+        ) -> None:
+        """
+Load one internal URI into the queue.
+        """
+        # normalize internal links to just their path
+        if uri.startswith("/"):
+            uri = f"{self.site_base}{uri}"
+
+        parsed: urllib.parse.ParseResult = urllib.parse.urlparse(uri)
+        normalized_path: str = posixpath.normpath(parsed.path)
+
+        uri = parsed._replace(path = normalized_path).geturl()
+        uri = uri.split("#")[0]
+        uri = uri.split("?")[0]
+
+        # determine a canonical path
+        path: str = Page.get_path(
+            uri,
+            base = self.site_base,
+        )
+
+        # filter out URLs to be ignored
+        if path in self.path_rewrites:
+            path = self.path_rewrites[path]
+
+        for prefix in self.ignored_prefix:
+            if path.startswith(prefix):
+                return
+
+        if path in self.ignored_paths:
+            return
+
+        if path in self.known_pages:
+            # add a back-reference
+            page: Page = self.known_pages[path]
+
+            if ref is not None:
+                page.add_ref(ref.path, slug)
+                ref.outbound.add(path)
+
+        else:
+            page = Page(
+                uri = uri,
+                kind = kind,
+                path = path,
+                slug = slug,
+            )
+
+            self.known_pages[path] = page
+            logging.debug("load: %s %s", page.uri, ref)
+
+            await self.queue.put(page)
+
+            if ref is not None:
+                page.add_ref(ref.path, slug)
+                ref.outbound.add(path)
+
+
+    async def load_queue_external (
+        self,
+        uri: str,
+        ref: typing.Optional[ Page ],
+        slug: typing.Optional[ str ],
+        ) -> None:
+        """
+Load one external URI into the queue.
+        """
+        uri = w3lib.url.canonicalize_url(uri)
+
+        if not uri.startswith("http"):
+            logging.error("unknown scheme: %s %s", uri, ref)
+
+        if uri not in self.known_pages:
+            page = Page(
+                uri = uri,
+                kind = URLKind.EXTERNAL,
+                slug = slug,
+            )
+
+            self.known_pages[uri] = page
+            logging.debug("load: %s %s", page.uri, ref)
+
+            await self.queue.put(page)
+
+        else:
+            page = self.known_pages[uri]
+
+        if ref is not None:
+            page.add_ref(ref.path, slug)
+            ref.outbound.add(uri)
+
+
+    async def load_queue (
         self,
         uri: str,
         ref: typing.Optional[ Page ],
@@ -100,93 +199,16 @@ Load one URI into the queue.
                 slug = uri
                 uri = self.shorty[uri].expanded_uri
 
+        # ignore internal anchors and data URLs (for now)
         if uri.startswith("#") or uri.startswith("data:"):
-            # ignore internal anchors and data URLs (for now)
             return
 
         if uri.startswith("/") or uri.startswith(self.site_base):
-            # normalize internal links to just their path
-            if uri.startswith("/"):
-                uri = f"{self.site_base}{uri}"
-
-            parsed: urllib.parse.ParseResult = urllib.parse.urlparse(uri)
-            normalized_path: str = posixpath.normpath(parsed.path)
-            uri = parsed._replace(path = normalized_path).geturl()
-            uri = uri.split("#")[0]
-            uri = uri.split("?")[0]
-
-            # determine a canonical path
-            path: str = Page.get_path(
-                uri,
-                base = self.site_base,
-            )
-
-            # filter out URLs to be ignored
-            if path in self.path_rewrites:
-                path = self.path_rewrites[path]
-
-            for prefix in self.ignored_prefix:
-                if path.startswith(prefix):
-                    return
-
-            if path in self.ignored_paths:
-                return
-
-            if path in self.known_pages:
-                # add a back-reference
-                page: Page = self.known_pages[path]
-
-                if ref is not None:
-                    page.add_ref(ref.path, slug)
-                    ref.outbound.add(path)
-
-            else:
-                page = Page(
-                    uri = uri,
-                    kind = kind,
-                    path = path,
-                    slug = slug,
-                )
-
-                self.known_pages[path] = page
-
-                message: str = f"load: {page.uri} {ref}"
-                logging.debug(message)
-
-                await self.queue.put(page)
-
-                if ref is not None:
-                    page.add_ref(ref.path, slug)
-                    ref.outbound.add(path)
+            await self.load_queue_internal(uri, ref, slug, kind)
 
         else:
             # a bona fide external link
-            uri = w3lib.url.canonicalize_url(uri)
-
-            if not uri.startswith("http"):
-                message = f"unknown scheme: {uri} {ref}"
-                logging.error(message)
-
-            if uri not in self.known_pages:
-                page = Page(
-                    uri = uri,
-                    kind = URLKind.EXTERNAL,
-                    slug = slug,
-                )
-
-                self.known_pages[uri] = page
-
-                message = f"load: {page.uri} {ref}"
-                logging.debug(message)
-
-                await self.queue.put(page)
-
-            else:
-                page = self.known_pages[uri]
-
-            if ref is not None:
-                page.add_ref(ref.path, slug)
-                ref.outbound.add(uri)
+            await self.load_queue_external(uri, ref, slug)
 
 
     async def produce_tasks (
@@ -200,13 +222,51 @@ Coroutine to produce URLs into the queue.
             await self.load_queue(uri, None)
 
 
+    async def crawl_internal (
+        self,
+        page: Page,
+        ) -> None:
+        """
+Crawl content for an internal page.
+        """
+        html: typing.Optional[ str ] = await page.request_content(
+            self.session,
+        )
+
+        if page.status_code in [ HTTPStatus.OK ]:
+            if html is not None and page.content_type in [ "text/html" ]:
+                self.count += 1
+
+                for emb_uri in page.extract_links(html):
+                    await self.load_queue(emb_uri, page)
+
+
+    async def crawl_external (
+        self,
+        page: Page,
+        ) -> None:
+        """
+Crawl content for an external page.
+        """
+        html = await page.request_content(
+            self.session,
+            allow_redirects = True,
+        )
+
+        if page.status_code not in [ HTTPStatus.NOT_FOUND ]:
+            if html is not None and page.content_type in [ "text/html" ]:
+                self.count += 1
+
+                soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
+                page.extract_meta(soup)
+
+
     async def consume_tasks (
         self,
         ) -> None:
         """
 Coroutine to consume URLs from the queue.
         """
-        count: int = 0
         logging.info("queue start")
 
         while not self.queue.empty():
@@ -214,8 +274,7 @@ Coroutine to consume URLs from the queue.
             assert page is not None
 
             # crawl!
-            message: str = f"task: {page.kind} {page.uri} {page.path}"
-            logging.debug(message)
+            logging.debug("task: %s %s %s", page.kind, page.uri, page.path)
 
             if page.path in self.shorty:
                 ## FUCK: handle shows
@@ -223,36 +282,17 @@ Coroutine to consume URLs from the queue.
 
             match page.kind:
                 case URLKind.INTERNAL:
-                    html: typing.Optional[ str ] = await page.request_content(
-                        self.session,
-                    )
-
-                    if page.status_code in [ HTTPStatus.OK ]:
-                        if html is not None and page.content_type in [ "text/html" ]:
-                            count += 1
-
-                            for emb_uri in page.extract_links(html):
-                                await self.load_queue(emb_uri, page)
+                    await self.crawl_internal(page)
 
                 case URLKind.EXTERNAL:
-                    html = await page.request_content(
-                        self.session,
-                        allow_redirects = True,
-                    )
-
-                    if page.status_code not in [ HTTPStatus.NOT_FOUND ]:
-                        if html is not None and page.content_type in [ "text/html" ]:
-                            count += 1
-
-                            soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
-                            page.extract_meta(soup)
+                    await self.crawl_external(page)
 
                 case _:
                     ic("how to crawl?", page)
 
             self.queue.task_done()
 
-        logging.info("queue done: %s / %d", count, len(self.known_pages))
+        logging.info("queue done: %s / %d", self.count, len(self.known_pages))
         ic(self.queue.qsize())
 
 
