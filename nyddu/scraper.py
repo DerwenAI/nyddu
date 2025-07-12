@@ -164,7 +164,7 @@ Check if URL is valid for extraction:
             return False
 
 
-    def scrape_page (  # pylint: disable=R0911,R0912,R0915
+    async def scrape_page (  # pylint: disable=R0911,R0912,R0915
         self,
         url: str,
         *,

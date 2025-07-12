@@ -24,6 +24,15 @@ import urllib3
 import w3lib.url
 
 from .page import Page, ShortenedURL, URLKind
+from .scraper import Scraper
+
+
+FAIR_USE_STATUS: typing.Set[ int ] = set([
+    HTTPStatus.FORBIDDEN, # 403
+    HTTPStatus.INTERNAL_SERVER_ERROR, # 500
+    HTTPStatus.SERVICE_UNAVAILABLE, # 503
+    999, # fuck LinkedIn for not following standards
+])
 
 
 class Crawler:  # pylint: disable=R0902
@@ -253,8 +262,11 @@ Crawl content for an external page.
             allow_redirects = True,
         )
 
-        if page.status_code not in [ HTTPStatus.NOT_FOUND ]:
-            if html is not None and page.content_type in [ "text/html" ]:
+        if page.content_type in [ "text/html" ]:
+            if page.status_code not in FAIR_USE_STATUS:
+                html = await scraper.scrape_page(page.uri)
+
+            if html is not None and page.status_code not in [ HTTPStatus.NOT_FOUND ]:
                 self.count += 1
 
                 soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
