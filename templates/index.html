@@ -49,7 +49,18 @@ a {
 
 td {
     height: 4em;
+    word-wrap: break-word;
     vertical-align: top;
+}
+
+th:nth-child(1) {
+    width: 23em;
+    max-width: 23em;
+}
+
+td:nth-child(1) {
+    width: 23em;
+    max-width: 23em;
 }
 
 }
@@ -79,7 +90,7 @@ td {
 	      href="{{ page.uri }}"
 	      target="_blank"
               ><span title="{{ page.uri }}">
-		{{ page.uri | truncate(33, true) }}
+		{{ page.uri | truncate(70, true) }}
 	    </span></a>
 	  </td>
 	  <td>
@@ -127,8 +138,7 @@ td {
     <script>
 $(document).ready(function() {
     $("#page_table").DataTable({
-	order: [[ 0, "desc" ]],
-	columnDefs: [{ width: "5%", targets: 0 }],
+        order: [[ 0, "desc" ]],
     });
 });
     </script>

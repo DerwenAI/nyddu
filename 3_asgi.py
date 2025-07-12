@@ -71,7 +71,7 @@ if __name__ == "__main__":
     )
 
     endpoints.pages = json.loads(
-        result.get_as_df().to_json(
+        result.get_as_df().fillna("").to_json(
             orient = "records",
             #lines = True,
             #indent = 2,
