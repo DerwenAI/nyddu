@@ -82,7 +82,7 @@ previous serialized cache from disk.
         return session
 
 
-    async def load_queue (  # pylint: disable=R0912
+    async def load_queue (  # pylint: disable=R0912,R0915
         self,
         uri: str,
         ref: typing.Optional[ Page ],
@@ -176,7 +176,7 @@ Load one URI into the queue.
 
                 self.known_pages[uri] = page
 
-                message: str = f"load: {page.uri} {ref}"
+                message = f"load: {page.uri} {ref}"
                 logging.debug(message)
 
                 await self.queue.put(page)
@@ -235,7 +235,7 @@ Coroutine to consume URLs from the queue.
                                 await self.load_queue(emb_uri, page)
 
                 case URLKind.EXTERNAL:
-                    html: typing.Optional[ str ] = await page.request_content(
+                    html = await page.request_content(
                         self.session,
                         allow_redirects = True,
                     )
@@ -252,7 +252,7 @@ Coroutine to consume URLs from the queue.
 
             self.queue.task_done()
 
-        logging.info(f"queue done: {count} / {len(self.known_pages)}")
+        logging.info("queue done: %s / %d", count, len(self.known_pages))
         ic(self.queue.qsize())
 
 

@@ -13,3 +13,5 @@ from .db import db_connect, load_model
 from .page import Page, ShortenedURL, URLKind
 
 from .routes import NydduEndpoints
+
+from .scraper import FAUX_USER_AGENT, Scraper

@@ -24,8 +24,7 @@ from pydantic import BaseModel
 import requests
 import requests_cache
 
-
-FAUX_USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.121 Safari/537.36"  # pylint: disable=C0301
+from .scraper import FAUX_USER_AGENT
 
 
 class URLKind (enum.StrEnum):
@@ -64,7 +63,7 @@ Represent object as a string.
         return f"{self.kind}  {self.uri} : {self.expanded_uri}"
 
 
-class Page (BaseModel):
+class Page (BaseModel):  # pylint: disable=R0902
     """
 A data class representing one HTML page.
     """
