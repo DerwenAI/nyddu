@@ -56,13 +56,14 @@ if __name__ == "__main__":
             "/watchlist": "/events",
         },
         ignored_paths = set([
-            "/articles",
+            "/sitemap.xml",
             "/cysoni",
             "/liber118_tboo",
+            ## these are redirects for bonafide external links to be checked:
+            "/articles",
             "/merch",
             "/meet",
             "/newsletter",
-            "/sitemap.xml",
             "/uptime",
         ]),
         ignored_prefix = [
@@ -71,6 +72,7 @@ if __name__ == "__main__":
             "/docs/",
         ],
         shorty = shorty,
+        use_scraper = True,
     )
 
     asyncio.run(
@@ -81,6 +83,8 @@ if __name__ == "__main__":
 
     # end code profiling
     profiler.stop()
+
+    ic(crawler.needs_scraper)
 
     # serialize intermediate data / report
     with open(pathlib.Path("report"), "w", encoding = "utf-8") as fp:

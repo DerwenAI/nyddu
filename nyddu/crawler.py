@@ -24,7 +24,6 @@ import urllib3
 import w3lib.url
 
 from .page import Page, ShortenedURL, URLKind
-from .scraper import Scraper
 
 
 FAIR_USE_STATUS: typing.Set[ int ] = set([
@@ -47,6 +46,7 @@ A spider-ish crawler.
         ignored_paths: typing.Set[ str ] = set([]),
         ignored_prefix: typing.List[ str ] = [],
         shorty: typing.Dict[ str, ShortenedURL ] = {},
+        use_scraper: bool = False,
         ) -> None:
         """
 Constructor.
@@ -69,14 +69,12 @@ Constructor.
         self.known_pages: typing.Dict[ str, Page ] = {}
         self.session: requests_cache.CachedSession = self.get_cache()
 
+        self.use_scraper: bool = use_scraper
+        self.needs_scraper: typing.List[ Page ] = []
+
         self.queue: asyncio.Queue = asyncio.Queue(
             maxsize = self.config["nyddu"]["queue_maxsize"],
-            )
-
-        self.scraper: Scraper = Scraper()
-
-        if not self.scraper.init_driver():
-            raise RuntimeError("could not initialize Chrome driver")
+        )
 
 
     def get_cache (
@@ -141,7 +139,7 @@ Load one internal URI into the queue.
 
             if ref is not None:
                 page.add_ref(ref.path, slug)
-                ref.outbound.add(path)
+                ref.outbound.add(uri)
 
         else:
             page = Page(
@@ -158,7 +156,7 @@ Load one internal URI into the queue.
 
             if ref is not None:
                 page.add_ref(ref.path, slug)
-                ref.outbound.add(path)
+                ref.outbound.add(uri)
 
 
     async def load_queue_external (
@@ -251,8 +249,12 @@ Crawl content for an internal page.
             if html is not None and page.content_type in [ "text/html" ]:
                 self.count += 1
 
-                for emb_uri in page.extract_links(html):
-                    await self.load_queue(emb_uri, page)
+                soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
+                page.extract_meta(soup)
+
+                for embed_uri in page.extract_links(soup):
+                    page.outbound.add(embed_uri)
+                    await self.load_queue(embed_uri, page)
 
 
     async def crawl_external (
@@ -268,8 +270,8 @@ Crawl content for an external page.
         )
 
         if page.content_type in [ "text/html" ]:
-            if page.status_code not in FAIR_USE_STATUS:
-                html = await self.scraper.scrape_page(page.uri)
+            if self.use_scraper and page.status_code in FAIR_USE_STATUS:
+                self.needs_scraper.append(page)
 
             if html is not None and page.status_code not in [ HTTPStatus.NOT_FOUND ]:
                 self.count += 1

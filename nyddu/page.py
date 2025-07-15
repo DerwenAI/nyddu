@@ -218,14 +218,11 @@ Filter valid links.
 
     def extract_links (
         self,
-        html: str,
+        soup: BeautifulSoup,
         ) -> Iterator[ str ]:
         """
 Extract all the links from an HTML document.
         """
-        soup: BeautifulSoup = BeautifulSoup(html, "html.parser")
-        self.extract_meta(soup)
-
         for tag in soup.find_all("a"):
             if "href" in tag.attrs:  # type: ignore
                 uri: typing.Optional[ str ] = self.validate_link(tag.attrs["href"], self.path)  # type: ignore  # pylint: disable=C0301

@@ -1,7 +1,8 @@
 
 ## TODO list:
 
-  * integrate Selenium-based scraper for failover
+  * integrate Selenium-based scraper for failover, as post-processing
+  * use `Page.id` for per-page detail
 
   * annotate/show the broken links
   * align the titles, keywords, descriptions
