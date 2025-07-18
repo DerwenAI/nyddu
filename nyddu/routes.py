@@ -35,7 +35,9 @@ Constructor.
         )
 
 
-    @classy_fastapi.get("/pages")
+    @classy_fastapi.get(
+        "/pages",
+    )
     def index_page (
         self,
         request: Request,
@@ -52,3 +54,17 @@ Serve an HTML page to search the crawled pages.
         )
 
         return response
+
+
+    @classy_fastapi.get(
+        "/detail/{page_id}",
+    )
+    def page_detail (
+        self,
+        request: Request,
+        page_id: str,
+        ) -> HTMLResponse:
+        """
+Show details for a given crawled URL.
+        """
+        return page_id
