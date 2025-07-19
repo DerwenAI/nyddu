@@ -5,21 +5,14 @@
 ASGI local mode via FastAPI and Uvicorn.
 """
 
-import json
 import pathlib
-import sys
 import tomllib
 import typing
 
 from fastapi import FastAPI, Request  # pylint: disable=E0401
-from icecream import ic
-from sentence_transformers import SentenceTransformer
-import kuzu
 import uvicorn  # pylint: disable=E0401
 
-from nyddu import NydduEndpoints, \
-    db_connect, load_model
-
+from nyddu import NydduEndpoints
 
 
 APP: FastAPI = FastAPI(
@@ -38,7 +31,6 @@ Serve a default home page.
     }
 
 
-
 if __name__ == "__main__":
     ## set up the endpoints
     config_path: pathlib.Path = pathlib.Path("config.toml")
@@ -47,39 +39,11 @@ if __name__ == "__main__":
     with open(config_path, mode = "rb") as fp:
         config = tomllib.load(fp)
 
-    endpoints: NydduEndpoints = NydduEndpoints(config)
+    endpoints: NydduEndpoints = NydduEndpoints(
+        config,
+    )
+
     APP.include_router(endpoints.router)
-
-    ## set up the KùzuDB connection
-    conn: kuzu.Connection = db_connect(db_path = pathlib.Path(config["db"]["db_path"]))
-
-    result = conn.execute(
-        """
-    MATCH (p:Page)
-    RETURN
-        p.id as id,
-        p.uri as uri,
-        p.slug as slug,
-        p.redirect as redirect,
-        p.type as type,
-        p.status as status,
-        p.title as title,
-        p.summary as summary,
-        p.error as error,
-        p.timing as timing
-        """,
-    )
-
-    endpoints.pages = json.loads(
-        result.get_as_df().fillna("").to_json(
-            orient = "records",
-            #lines = True,
-            #indent = 2,
-        )
-    )
-
-    #print(endpoints.pages)
-    #sys.exit(0)
 
     ## run the webapp
     uvicorn.run(

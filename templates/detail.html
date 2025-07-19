@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+/* fonts, icons */
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap");
+
+/* structural */
+html, h1, h2, h3, h4, h5, p, span, cite, figcaption, button, input, select, textarea {
+    font-family: "Atkinson Hyperlegible", sans-serif;
+}
+
+body {
+    color: hsl(0, 0%, 40%);
+}
+
+p {
+    font-weight: normal;
+    font-size: 1.1em;
+    line-height: 1.3em;
+    margin: 1.2em 0 1.2em 0;
+}
+
+a {
+    color: hsl(55, 17%, 49%);
+    background-color: white;
+    font-weight: bold;
+}
+
+a:visited {
+    color: hsl(55, 17%, 49%);
+    background-color: white;
+}
+
+a:hover {
+    color: white;
+    background-color: hsl(55, 17%, 49%);
+}
+
+a {
+    text-decoration: none !important;
+}
+    </style>
+    <title>Crawler Analysis Detail</title>
+  </head>
+
+  <body>
+    <h3>metadata</h3>
+    {% for dict_item in detail %}
+    <dl>
+      {% for key, val in dict_item.items() %}
+      <dt>
+	{{ key }}
+      </dt>
+      <dd>
+	<strong>
+	  <code>
+	    {% if val is not string or val|length %}
+	    {{ val }}
+	    {% else %}
+	    &nbsp;
+	    {% endif %}
+	  </code>
+	</strong>
+      </dd>
+      {% endfor %}
+    </dl>
+    {% endfor %}
+
+    <h3>inbound links</h3>
+    <ul>
+    {% for page in dst_links %}
+    <li>
+      <a
+	href="/detail/{{ page.id }}"
+	target="detail"
+        >
+	{{ page.uri }}
+      </a>
+    </li>
+    {% endfor %}
+    </ul>
+
+    <h3>outbound links</h3>
+    <ul>
+    {% for page in src_links %}
+    <li>
+      <a
+	href="/detail/{{ page.id }}"
+	target="detail"
+        >
+	{{ page.uri }}
+      </a>
+    </li>
+    {% endfor %}
+    </ul>
+  </body>
+</html>
