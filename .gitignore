@@ -5,6 +5,7 @@ cache.sqlite
 config.toml
 db
 db.lock
+history.txt
 report
 
 # Byte-compiled / optimized / DLL files

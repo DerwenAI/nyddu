@@ -122,10 +122,11 @@ Show details for a given crawled URL.
         ).get_as_df()
 
         dst_links_query: str = """
-    MATCH (src:Page)-[:Link]->(dst:Page {id: $id})
+    MATCH (src:Page)-[rel:Link]->(dst:Page {id: $id})
     RETURN
         src.id as id,
-        src.uri as uri
+        src.uri as uri,
+        rel.sym as sym
         """
 
         dst_links_df: pd.DataFrame = self.conn.execute(  # type: ignore
@@ -134,10 +135,11 @@ Show details for a given crawled URL.
         ).get_as_df()
 
         src_links_query: str = """
-    MATCH (src:Page {id: $id})-[:Link]->(dst:Page)
+    MATCH (src:Page {id: $id})-[rel:Link]->(dst:Page)
     RETURN
         dst.id as id,
-        dst.uri as uri
+        dst.uri as uri,
+        rel.sym as sym
         """
 
         src_links_df: pd.DataFrame = self.conn.execute(  # type: ignore

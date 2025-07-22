@@ -59,7 +59,6 @@ Main entry point
 
     conn: kuzu.Connection = db_connect(
         db_path = pathlib.Path(config["db"]["db_path"]),
-        clean = False, #True
     )
 
     ## start code profiling

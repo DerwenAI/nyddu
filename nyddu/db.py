@@ -5,9 +5,7 @@
 Utility methods to support KùzuDB access patterns.
 """
 
-import contextlib
 import pathlib
-import shutil
 
 import kuzu
 from sentence_transformers import SentenceTransformer
@@ -16,18 +14,10 @@ from sentence_transformers import SentenceTransformer
 def db_connect (
     *,
     db_path: pathlib.Path = pathlib.Path("db"),
-    clean: bool = False,
     ) -> kuzu.Connection:
     """
-Initialize a KùzuDB connection, optionally removing any previous data if it exits.
+Initialize a KùzuDB connection.
     """
-    if clean:
-        with contextlib.suppress(FileNotFoundError):
-            shutil.rmtree(db_path)
-
-
-    print("CREATE", db_path)
-
     return kuzu.Connection(kuzu.Database(db_path))
 
 
