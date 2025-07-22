@@ -70,8 +70,8 @@ Main entry point
     ## define schema
 
     conn.execute("""
-DROP TABLE Link;
-DROP TABLE Page;
+DROP TABLE IF EXISTS Link;
+DROP TABLE IF EXISTS Page;
     """)
 
     conn.execute("""

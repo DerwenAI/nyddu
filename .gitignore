@@ -3,7 +3,8 @@
 cache.nyddu
 cache.sqlite
 config.toml
-db/
+db
+db.lock
 report
 
 # Byte-compiled / optimized / DLL files
