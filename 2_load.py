@@ -16,13 +16,11 @@ from pyinstrument import Profiler
 import kuzu
 import pandas as pd
 
-from nyddu import db_connect, load_model
-from sentence_transformers import SentenceTransformer
+from nyddu import db_connect
 
 
 def verify_page (
     page: dict,
-    model: SentenceTransformer,
     ) -> dict:
     """
 Format the data for one row, so that neither Polars nor Pandas loose their minds.
@@ -32,11 +30,6 @@ Format the data for one row, so that neither Polars nor Pandas loose their minds
 
     if page["slug"] is not None:
         page["slug"] = page["slug"].strip().lstrip("/s/")
-
-    embedding: typing.Optional[ list ] = None
-
-    if page["title"] is not None:
-        embedding = model.encode(page["title"]).tolist()
 
     return {
         "uri": page["uri"],
@@ -49,8 +42,7 @@ Format the data for one row, so that neither Polars nor Pandas loose their minds
         "summary": page["summary"],
         "thumbnail": page["thumbnail"],
         "error": page["error"],
-        "timing": page["timing"],
-        "embedding": embedding,
+        "timing": page["timing"]
     }
 
 
@@ -65,19 +57,10 @@ Main entry point
     with open(config_path, mode = "rb") as fp:
         config = tomllib.load(fp)
 
-    model: SentenceTransformer = load_model()
-
     conn: kuzu.Connection = db_connect(
         db_path = pathlib.Path(config["db"]["db_path"]),
-        clean = True,
+        clean = False, #True
     )
-
-    # install and load vector extension
-    # create tables
-    conn.execute("""
-INSTALL vector;
-LOAD vector;
-    """)
 
     ## start code profiling
     profiler: Profiler = Profiler()
@@ -85,6 +68,11 @@ LOAD vector;
 
     ######################################################################
     ## define schema
+
+    conn.execute("""
+DROP TABLE Link;
+DROP TABLE Page;
+    """)
 
     conn.execute("""
 CREATE NODE TABLE Page(
@@ -99,8 +87,7 @@ CREATE NODE TABLE Page(
     summary STRING,
     thumbnail STRING,
     error STRING,
-    timing DOUBLE,
-    embedding DOUBLE[384]
+    timing DOUBLE
 );
     """)
 
@@ -118,7 +105,7 @@ CREATE REL TABLE Link(
         dat: list = json.load(fp)
 
     df_page = pd.DataFrame([
-        verify_page(page, model)
+        verify_page(page)
         for page in dat
     ])
     ic(df_page)
@@ -166,48 +153,6 @@ COPY Page FROM df_page
             """,
             row,
         )
-
-    ## vector search
-    conn.execute(
-        """
-    CALL CREATE_VECTOR_INDEX(
-        'Page',
-        'title_vec_index',
-        'embedding'
-    );
-        """
-    )
-
-    query: str = "paco"
-    query_vector: list = model.encode(query).tolist()
-
-    result: QueryResult = conn.execute(
-        """
-    CALL QUERY_VECTOR_INDEX(
-        'Page',
-        'title_vec_index',
-        $query_vector,
-        2
-    )
-    RETURN node.title ORDER BY distance;
-        """,
-        { "query_vector": query_vector, },
-    )
-
-    ic(result.get_as_pl())
-
-    result = conn.execute(
-        """
-    CALL QUERY_VECTOR_INDEX('Page', 'title_vec_index', $query_vector, 2)
-    WITH node AS n, distance
-    MATCH (n)-[:Link]->(p:Page)
-    RETURN n.uri, p.uri, distance
-    ORDER BY distance LIMIT 5;
-        """,
-        { "query_vector": query_vector,},
-    )
-
-    ic(result.get_as_pl())
 
     ## end code profiling
     profiler.stop()

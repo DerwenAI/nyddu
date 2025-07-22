@@ -25,6 +25,9 @@ Initialize a KùzuDB connection, optionally removing any previous data if it exi
         with contextlib.suppress(FileNotFoundError):
             shutil.rmtree(db_path)
 
+
+    print("CREATE", db_path)
+
     return kuzu.Connection(kuzu.Database(db_path))
 
 
