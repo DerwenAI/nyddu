@@ -112,7 +112,7 @@ Constructor.
 Test the installed driver before scraping.
         """
         try:
-            self.driver = webdriver.Chrome(
+            self.driver = webdriver.Chrome(  # pylint:disable=E1102
                 options = self.chrome_options,
             )
 

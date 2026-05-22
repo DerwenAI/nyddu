@@ -75,8 +75,8 @@ Serve an HTML page to search the crawled pages via DataTables.
         ).get_as_df()
 
         response: HTMLResponse = self.templates.TemplateResponse(
-            "pages.html",
-            {
+            "pages.html",  # type: ignore
+            {  # type: ignore
                 "request": request,
                 "pages": json.loads(
                     pages_df.fillna("").to_json(
@@ -148,8 +148,8 @@ Show details for a given crawled URL.
         ).get_as_df()
 
         response: HTMLResponse = self.templates.TemplateResponse(
-            "detail.html",
-            {
+            "detail.html",  # type: ignore
+            {  # type: ignore
                 "request": request,
                 "detail": json.loads(
                     detail_df.fillna("").to_json(
